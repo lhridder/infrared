@@ -30,7 +30,7 @@ var (
 func init() {
 	responseJSON := status.ResponseJSON{
 		Version: status.VersionJSON{
-			Name:     "",
+			Name:     "Infrared",
 			Protocol: 0,
 		},
 		Players: status.PlayersJSON{
@@ -38,7 +38,7 @@ func init() {
 			Online: 0,
 		},
 		Description: status.DescriptionJSON{
-			Text: "Powered by ...Hosting",
+			Text: "There is no proxy associated with this domain. Please check your configuration.",
 		},
 	}
 	bb, _ := json.Marshal(responseJSON)
