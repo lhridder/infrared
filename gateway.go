@@ -103,12 +103,18 @@ func (gateway *Gateway) Close() {
 
 func (gateway *Gateway) CloseProxy(proxyUID string) {
 	log.Println("Closing proxy with UID", proxyUID)
-	v, ok := gateway.proxies.LoadAndDelete(proxyUID)
+	v, ok := gateway.proxies.Load(proxyUID)
 	if !ok {
 		return
 	}
 	proxiesActive.Dec()
 	proxy := v.(*Proxy)
+
+	uids := proxy.UIDs()
+	for _, uid := range uids {
+		log.Println("Closing proxy with UID", uid)
+		gateway.proxies.Delete(uid)
+	}
 
 	closeListener := true
 	gateway.proxies.Range(func(k, v interface{}) bool {
