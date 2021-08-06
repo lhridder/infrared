@@ -229,7 +229,8 @@ scrape_configs:
   * **host:** listenTo domain as specified in the infrared configuration.
   * **instance:** what infrared instance the amount of players are connected to.
   * **job:** what job was specified in the prometheus configuration.
-* infrared_proxies: show the amount of active infrared proxies:
-  * **Example response:** `infrared_proxies{instance="vps1.example.com:9070",job="infrared"} 5`
-  * **instance:** what infrared instance has that amount of active proxies.
-  * **job:** what job was specified in the prometheus configuration.
+* infrared_handshakes: counter of the number of handshake packets received per instande, type and target:
+  * **Example response:** `infrared_handshakes{instance="vps1.example.com:9070",type="status",host="proxy.example.com"} 5`
+  * **instance:** what infrared instance handshakes were received on.
+  * **type:** the type of handshake received; "status" or "login".
+  * **host:** the target host specified by the "Server Address" field in the handshake packet. [[1]](https://wiki.vg/Protocol#Handshaking)

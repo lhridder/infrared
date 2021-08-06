@@ -260,11 +260,9 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
 		return err
 	}
 
-	var username string
-	connected := false
 	if hs.IsLoginRequest() {
 		proxy.cancelProcessTimeout()
-		username, err = proxy.sniffUsername(conn, rconn, connRemoteAddr)
+		username, err := proxy.sniffUsername(conn, rconn, connRemoteAddr)
 		if err != nil {
 			return err
 		}
@@ -276,21 +274,18 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
 			ProxyUID:      proxyUID,
 		})
 		playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
-		connected = true
-	}
 
-	go pipe(rconn, conn)
-	pipe(conn, rconn)
-
-	if connected {
-		proxy.logEvent(callback.PlayerLeaveEvent{
+		defer proxy.logEvent(callback.PlayerLeaveEvent{
 			Username:      username,
 			RemoteAddress: connRemoteAddr.String(),
 			TargetAddress: proxyTo,
 			ProxyUID:      proxyUID,
 		})
-		playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
+		defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
 	}
+
+	go pipe(rconn, conn)
+	pipe(conn, rconn)
 
 	remainingPlayers := proxy.removePlayer(conn)
 	if remainingPlayers <= 0 {
