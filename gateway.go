@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/haveachin/infrared/callback"
@@ -160,8 +161,10 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 	}
 
 	playersConnected.WithLabelValues(proxy.DomainName())
-	handshakeCount.WithLabelValues("login", proxy.DomainName())
-	handshakeCount.WithLabelValues("status", proxy.DomainName())
+	
+	// Disabled because since the host is taken from the packet anyway
+	//handshakeCount.WithLabelValues("login", proxy.DomainName())
+	//handshakeCount.WithLabelValues("status", proxy.DomainName())
 
 	// Check if a gate is already listening to the Proxy address
 	addr := proxy.ListenTo()
@@ -235,9 +238,9 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 
 	serverAddress := hs.ParseServerAddress()
 	if hs.IsLoginRequest() {
-		handshakeCount.With(prometheus.Labels{"type": "login", "host": serverAddress}).Inc()
+		handshakeCount.With(prometheus.Labels{"type": "login", "host": strings.ToLower(serverAddress)}).Inc()
 	} else if hs.IsStatusRequest() {
-		handshakeCount.With(prometheus.Labels{"type": "status", "host": serverAddress}).Inc()
+		handshakeCount.With(prometheus.Labels{"type": "status", "host": strings.ToLower(serverAddress)}).Inc()
 	}
 
 	proxyUID := proxyUID(serverAddress, addr)
