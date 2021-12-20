@@ -161,7 +161,7 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 	}
 
 	playersConnected.WithLabelValues(proxy.DomainName())
-	
+
 	// Disabled because since the host is taken from the packet anyway
 	//handshakeCount.WithLabelValues("login", proxy.DomainName())
 	//handshakeCount.WithLabelValues("status", proxy.DomainName())
@@ -237,10 +237,11 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 	}
 
 	serverAddress := hs.ParseServerAddress()
+	host := strings.ToLower(strings.Split(serverAddress, "###")[0])
 	if hs.IsLoginRequest() {
-		handshakeCount.With(prometheus.Labels{"type": "login", "host": strings.ToLower(serverAddress)}).Inc()
+		handshakeCount.With(prometheus.Labels{"type": "login", "host": host}).Inc()
 	} else if hs.IsStatusRequest() {
-		handshakeCount.With(prometheus.Labels{"type": "status", "host": strings.ToLower(serverAddress)}).Inc()
+		handshakeCount.With(prometheus.Labels{"type": "status", "host": host}).Inc()
 	}
 
 	proxyUID := proxyUID(serverAddress, addr)
