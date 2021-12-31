@@ -1,13 +1,17 @@
 package infrared
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/haveachin/infrared/callback"
+	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
+	"github.com/haveachin/infrared/protocol/status"
 	"github.com/pires/go-proxyproto"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -16,11 +20,34 @@ import (
 )
 
 var (
-	proxiesActive = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "infrared_proxies",
-		Help: "The total number of proxies running",
-	})
+	handshakeCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "infrared_handshakes",
+		Help: "The total number of handshakes made to each proxy by type",
+	}, []string{"type", "host"})
+
+	responsePk protocol.Packet
 )
+
+func init() {
+	responseJSON := status.ResponseJSON{
+		Version: status.VersionJSON{
+			Name:     "Infrared",
+			Protocol: 0,
+		},
+		Players: status.PlayersJSON{
+			Max:    0,
+			Online: 0,
+		},
+		Description: status.DescriptionJSON{
+			Text: "There is no proxy associated with this domain. Please check your configuration.",
+		},
+	}
+	bb, _ := json.Marshal(responseJSON)
+
+	responsePk = status.ClientBoundResponse{
+		JSONResponse: protocol.String(bb),
+	}.Marshal()
+}
 
 type Gateway struct {
 	listeners            sync.Map
@@ -77,12 +104,18 @@ func (gateway *Gateway) Close() {
 
 func (gateway *Gateway) CloseProxy(proxyUID string) {
 	log.Println("Closing proxy with UID", proxyUID)
+
 	v, ok := gateway.Proxies.LoadAndDelete(proxyUID)
 	if !ok {
 		return
 	}
-	proxiesActive.Dec()
 	proxy := v.(*Proxy)
+
+	uids := proxy.UIDs()
+	for _, uid := range uids {
+		log.Println("Closing proxy with UID", uid)
+		gateway.proxies.Delete(uid)
+	}
 
 	closeListener := true
 	gateway.Proxies.Range(func(k, v interface{}) bool {
@@ -107,10 +140,17 @@ func (gateway *Gateway) CloseProxy(proxyUID string) {
 
 func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 	// Register new Proxy
+	uids := proxy.UIDs()
+	for _, uid := range uids {
+		log.Println("Registering proxy with UID", uid)
+		gateway.proxies.Store(uid, proxy)
+	}
 	proxyUID := proxy.UID()
+
 	log.Println("Registering proxy with UID", proxyUID)
 	gateway.Proxies.Store(proxyUID, proxy)
 	proxiesActive.Inc()
+
 
 	proxy.Config.removeCallback = func() {
 		gateway.CloseProxy(proxyUID)
@@ -127,6 +167,10 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 	}
 
 	playersConnected.WithLabelValues(proxy.DomainName())
+
+	// Disabled because since the host is taken from the packet anyway
+	//handshakeCount.WithLabelValues("login", proxy.DomainName())
+	//handshakeCount.WithLabelValues("status", proxy.DomainName())
 
 	// Check if a gate is already listening to the Proxy address
 	addr := proxy.ListenTo()
@@ -198,11 +242,26 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 		return err
 	}
 
-	proxyUID := proxyUID(hs.ParseServerAddress(), addr)
+	serverAddress := hs.ParseServerAddress()
+	host := strings.ToLower(strings.Split(serverAddress, "###")[0])
+	if hs.IsLoginRequest() {
+		handshakeCount.With(prometheus.Labels{"type": "login", "host": host}).Inc()
+	} else if hs.IsStatusRequest() {
+		handshakeCount.With(prometheus.Labels{"type": "status", "host": host}).Inc()
+	}
+
+	proxyUID := proxyUID(serverAddress, addr)
 
 	log.Printf("[i] %s requests proxy with UID %s", connRemoteAddr, proxyUID)
 	v, ok := gateway.Proxies.Load(proxyUID)
 	if !ok {
+		if hs.IsStatusRequest() {
+			conn.ReadPacket()
+			conn.WritePacket(responsePk)
+			pingPk, _ := conn.ReadPacket()
+			conn.WritePacket(pingPk)
+		}
+
 		// Client send an invalid address/port; we don't have a v for that address
 		return errors.New("no proxy with uid " + proxyUID)
 	}

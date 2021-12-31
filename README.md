@@ -141,7 +141,7 @@ More info on [Portainer](https://www.portainer.io/).
 
 ```json
 {
-  "domainName": "mc.example.com",
+  "domainNames": ["mc.example.com", "example.com"],
   "proxyTo": ":8080"
 }
 ```
@@ -155,7 +155,7 @@ More info on [Portainer](https://www.portainer.io/).
 
 ```json
 {
-  "domainName": "mc.example.com",
+  "domainNames": ["mc.example.com", "example.com"],
   "listenTo": ":25565",
   "proxyTo": ":8080",
   "proxyBind": "0.0.0.0",
@@ -274,6 +274,7 @@ scrape_configs:
   * **host:** listenTo domain as specified in the infrared configuration.
   * **instance:** what infrared instance the amount of players are connected to.
   * **job:** what job was specified in the prometheus configuration.
+
 * infrared_proxies: show the amount of active infrared proxies:
   * **Example response:** `infrared_proxies{instance="vps1.example.com:9070",job="infrared"} 5`
   * **instance:** what infrared instance has that amount of active proxies.

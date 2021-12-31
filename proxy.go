@@ -73,10 +73,16 @@ func (proxy *Proxy) Process() process.Process {
 	return nil
 }
 
+func (proxy *Proxy) DomainNames() []string {
+	proxy.Config.RLock()
+	defer proxy.Config.RUnlock()
+	return proxy.Config.DomainNames
+}
+
 func (proxy *Proxy) DomainName() string {
 	proxy.Config.RLock()
 	defer proxy.Config.RUnlock()
-	return proxy.Config.DomainName
+	return proxy.Config.DomainNames[0]
 }
 
 func (proxy *Proxy) ListenTo() string {
@@ -156,6 +162,15 @@ func (proxy *Proxy) CallbackLogger() callback.Logger {
 
 func (proxy *Proxy) UID() string {
 	return proxyUID(proxy.DomainName(), proxy.ListenTo())
+}
+
+func (proxy *Proxy) UIDs() []string {
+	uids := []string{}
+	for _, domain := range(proxy.DomainNames()) {
+		uid := proxyUID(domain, proxy.ListenTo())
+		uids = append(uids, uid)
+	}
+	return uids
 }
 
 func (proxy *Proxy) addPlayer(conn Conn, username string) {
@@ -249,11 +264,9 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
 		return err
 	}
 
-	var username string
-	connected := false
 	if hs.IsLoginRequest() {
 		proxy.cancelProcessTimeout()
-		username, err = proxy.sniffUsername(conn, rconn, connRemoteAddr)
+		username, err := proxy.sniffUsername(conn, rconn, connRemoteAddr)
 		if err != nil {
 			return err
 		}
@@ -265,21 +278,18 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
 			ProxyUID:      proxyUID,
 		})
 		playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
-		connected = true
-	}
 
-	go pipe(rconn, conn)
-	pipe(conn, rconn)
-
-	if connected {
-		proxy.logEvent(callback.PlayerLeaveEvent{
+		defer proxy.logEvent(callback.PlayerLeaveEvent{
 			Username:      username,
 			RemoteAddress: connRemoteAddr.String(),
 			TargetAddress: proxyTo,
 			ProxyUID:      proxyUID,
 		})
-		playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
+		defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
 	}
+
+	go pipe(rconn, conn)
+	pipe(conn, rconn)
 
 	remainingPlayers := proxy.removePlayer(conn)
 	if remainingPlayers <= 0 {
