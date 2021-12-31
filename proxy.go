@@ -223,10 +223,14 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
 	}
 
 	if proxy.ProxyProtocol() {
+		var proto = proxyproto.TCPv4
+		if connRemoteAddr.To4() == nil {
+			proto = proxyproto.TCPv6
+		}
 		header := &proxyproto.Header{
 			Version:           2,
 			Command:           proxyproto.PROXY,
-			TransportProtocol: proxyproto.TCPv4,
+			TransportProtocol: proto,
 			SourceAddr:        connRemoteAddr,
 			DestinationAddr:   rconn.RemoteAddr(),
 		}
