@@ -74,6 +74,9 @@ func main() {
 	log.Println("Loading global config")
 	infrared.LoadGlobalConfig()
 
+	log.Println("Loading GeoIPDB")
+	infrared.LoadDB()
+
 	log.Println("Loading proxy configs")
 
 	cfgs, err := infrared.LoadProxyConfigsFromPath(configPath, false)

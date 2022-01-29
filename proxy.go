@@ -2,6 +2,7 @@ package infrared
 
 import (
 	"fmt"
+	"github.com/oschwald/geoip2-golang"
 	"log"
 	"net"
 	"strings"
@@ -23,10 +24,15 @@ var (
 		Name: "infrared_connected",
 		Help: "The total number of connected players",
 	}, []string{"host"})
+	db *geoip2.Reader
 )
 
 func proxyUID(domain, addr string) string {
 	return fmt.Sprintf("%s@%s", strings.ToLower(domain), addr)
+}
+
+func LoadDB() {
+	db, _ = geoip2.Open(GeoIPdatabasefile)
 }
 
 type Proxy struct {
@@ -166,7 +172,7 @@ func (proxy *Proxy) UID() string {
 
 func (proxy *Proxy) UIDs() []string {
 	uids := []string{}
-	for _, domain := range(proxy.DomainNames()) {
+	for _, domain := range proxy.DomainNames() {
 		uid := proxyUID(domain, proxy.ListenTo())
 		uids = append(uids, uid)
 	}
@@ -219,6 +225,16 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
 		return err
 	}
 
+	country := ""
+	if GeoIPenabled {
+		ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
+		record, err := db.Country(net.ParseIP(ip))
+		if err != nil {
+			log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
+		}
+		country = record.Country.IsoCode
+	}
+
 	rconn, err := dialer.Dial(proxyTo)
 	if err != nil {
 		log.Printf("[i] %s did not respond to ping; is the target offline?", proxyTo)
@@ -262,7 +278,7 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
 
 	if hs.IsLoginRequest() {
 		proxy.cancelProcessTimeout()
-		username, err := proxy.sniffUsername(conn, rconn, connRemoteAddr)
+		username, err := proxy.sniffUsername(conn, rconn, connRemoteAddr, country)
 		if err != nil {
 			return err
 		}
@@ -367,7 +383,7 @@ func (proxy *Proxy) cancelProcessTimeout() {
 	proxy.cancelTimeoutFunc = nil
 }
 
-func (proxy *Proxy) sniffUsername(conn, rconn Conn, connRemoteAddr net.Addr) (string, error) {
+func (proxy *Proxy) sniffUsername(conn, rconn Conn, connRemoteAddr net.Addr, country string) (string, error) {
 	pk, err := conn.ReadPacket()
 	if err != nil {
 		return "", err
@@ -378,7 +394,7 @@ func (proxy *Proxy) sniffUsername(conn, rconn Conn, connRemoteAddr net.Addr) (st
 	if err != nil {
 		return "", err
 	}
-	log.Printf("[i] %s with username %s connects through %s", connRemoteAddr, ls.Name, proxy.UID())
+	log.Printf("[i] %s with username %s from %s connects through %s", connRemoteAddr, ls.Name, country, proxy.UID())
 	return string(ls.Name), nil
 }
 

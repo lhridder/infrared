@@ -44,13 +44,19 @@ type ProxyConfig struct {
 }
 
 type GlobalConfig struct {
-	GenericPingVersion     string `json:"genericPingVersion"`
-	GenericPingDescription string `json:"genericPingDescription"`
+	GenericPingVersion     string   `json:"genericPingVersion"`
+	GenericPingDescription string   `json:"genericPingDescription"`
+	GeoIPenabled           bool     `json:"geoIPenabled"`
+	GeoIPdatabasefile      string   `json:"geoIPdatabasefile"`
+	CountryWhitelist       []string `json:"countryWhitelist"`
 }
 
 var (
 	GenericPingVersion     = "Infrared"
 	GenericPingDescription = "There is no proxy associated with this domain. Please check your configuration."
+	GeoIPenabled           = false
+	GeoIPdatabasefile      string
+	CountryWhitelist       []string
 )
 
 func (cfg *ProxyConfig) Dialer() (*Dialer, error) {
@@ -435,6 +441,9 @@ func LoadGlobalConfig() {
 	_ = jsonFile.Close()
 	GenericPingVersion = config.GenericPingVersion
 	GenericPingDescription = config.GenericPingDescription
+	GeoIPenabled = config.GeoIPenabled
+	GeoIPdatabasefile = config.GeoIPdatabasefile
+	CountryWhitelist = config.CountryWhitelist
 }
 
 func DefaultStatusResponse() protocol.Packet {

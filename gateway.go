@@ -3,17 +3,16 @@ package infrared
 import (
 	"errors"
 	"github.com/haveachin/infrared/callback"
-	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/pires/go-proxyproto"
-	"log"
-	"net/http"
-	"strings"
-	"sync"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"log"
+	"net"
+	"net/http"
+	"strings"
+	"sync"
 )
 
 var (
@@ -21,8 +20,8 @@ var (
 		Name: "infrared_handshakes",
 		Help: "The total number of handshakes made to each proxy by type",
 	}, []string{"type", "host"})
-
-	responsePk protocol.Packet
+	//TODO make variable
+	underAttack = true
 )
 
 type Gateway struct {
@@ -212,6 +211,25 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 		return err
 	}
 
+	country := ""
+	if GeoIPenabled && underAttack {
+		ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
+		record, err := db.Country(net.ParseIP(ip))
+		if err != nil {
+			log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
+		}
+		if contains(CountryWhitelist, record.Country.IsoCode) {
+			//TODO further checks
+		} else {
+			err := conn.Close()
+			if err != nil {
+				log.Println(err)
+			}
+			log.Printf("[i] Blocked %s from joining because of country %s", connRemoteAddr, country)
+			return nil
+		}
+	}
+
 	serverAddress := hs.ParseServerAddress()
 	host := strings.ToLower(strings.Split(serverAddress, "###")[0])
 	if hs.IsLoginRequest() {
@@ -245,4 +263,13 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 		return err
 	}
 	return nil
+}
+
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+	return false
 }
