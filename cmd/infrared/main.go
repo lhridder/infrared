@@ -18,15 +18,15 @@ const (
 const (
 	clfConfigPath           = "config-path"
 	clfReceiveProxyProtocol = "receive-proxy-protocol"
-    clfPrometheusEnabled    = "enable-prometheus"
-    clfPrometheusBind       = "prometheus-bind"
+	clfPrometheusEnabled    = "enable-prometheus"
+	clfPrometheusBind       = "prometheus-bind"
 )
 
 var (
 	configPath           = "./configs"
 	receiveProxyProtocol = false
-    prometheusEnabled    = false
-    prometheusBind       = ":9100"
+	prometheusEnabled    = false
+	prometheusBind       = ":9100"
 )
 
 func envBool(name string, value bool) bool {
@@ -60,8 +60,8 @@ func initEnv() {
 func initFlags() {
 	flag.StringVar(&configPath, clfConfigPath, configPath, "path of all proxy configs")
 	flag.BoolVar(&receiveProxyProtocol, clfReceiveProxyProtocol, receiveProxyProtocol, "should accept proxy protocol")
-    flag.BoolVar(&prometheusEnabled, clfPrometheusEnabled, prometheusEnabled, "should run prometheus client exposing metrics")
-    flag.StringVar(&prometheusBind, clfPrometheusBind, prometheusBind, "bind address and/or port for prometheus")
+	flag.BoolVar(&prometheusEnabled, clfPrometheusEnabled, prometheusEnabled, "should run prometheus client exposing metrics")
+	flag.StringVar(&prometheusBind, clfPrometheusBind, prometheusBind, "bind address and/or port for prometheus")
 	flag.Parse()
 }
 
@@ -71,6 +71,9 @@ func init() {
 }
 
 func main() {
+	log.Println("Loading global config")
+	infrared.LoadGlobalConfig()
+
 	log.Println("Loading proxy configs")
 
 	cfgs, err := infrared.LoadProxyConfigsFromPath(configPath, false)

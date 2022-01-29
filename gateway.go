@@ -1,18 +1,15 @@
 package infrared
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/haveachin/infrared/callback"
+	"github.com/haveachin/infrared/protocol"
+	"github.com/haveachin/infrared/protocol/handshaking"
+	"github.com/pires/go-proxyproto"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
-
-	"github.com/haveachin/infrared/callback"
-	"github.com/haveachin/infrared/protocol"
-	"github.com/haveachin/infrared/protocol/handshaking"
-	"github.com/haveachin/infrared/protocol/status"
-	"github.com/pires/go-proxyproto"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -27,27 +24,6 @@ var (
 
 	responsePk protocol.Packet
 )
-
-func init() {
-	responseJSON := status.ResponseJSON{
-		Version: status.VersionJSON{
-			Name:     "Infrared",
-			Protocol: 0,
-		},
-		Players: status.PlayersJSON{
-			Max:    0,
-			Online: 0,
-		},
-		Description: status.DescriptionJSON{
-			Text: "There is no proxy associated with this domain. Please check your configuration.",
-		},
-	}
-	bb, _ := json.Marshal(responseJSON)
-
-	responsePk = status.ClientBoundResponse{
-		JSONResponse: protocol.String(bb),
-	}.Marshal()
-}
 
 type Gateway struct {
 	listeners            sync.Map
@@ -251,7 +227,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 	if !ok {
 		if hs.IsStatusRequest() {
 			conn.ReadPacket()
-			conn.WritePacket(responsePk)
+			conn.WritePacket(DefaultStatusResponse())
 			pingPk, _ := conn.ReadPacket()
 			conn.WritePacket(pingPk)
 		}

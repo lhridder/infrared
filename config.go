@@ -43,6 +43,16 @@ type ProxyConfig struct {
 	CallbackServer    CallbackServerConfig `json:"callbackServer"`
 }
 
+type GlobalConfig struct {
+	GenericPingVersion     string `json:"genericPingVersion"`
+	GenericPingDescription string `json:"genericPingDescription"`
+}
+
+var (
+	GenericPingVersion     = "Infrared"
+	GenericPingDescription = "There is no proxy associated with this domain. Please check your configuration."
+)
+
 func (cfg *ProxyConfig) Dialer() (*Dialer, error) {
 	if cfg.dialer != nil {
 		return cfg.dialer, nil
@@ -409,4 +419,41 @@ func WatchProxyConfigFolder(path string, out chan *ProxyConfig) error {
 			log.Printf("Failed watching %s; error %s", path, err)
 		}
 	}
+}
+
+func LoadGlobalConfig() {
+	jsonFile, err := os.Open("config.json")
+	if err != nil {
+		panic(err)
+	}
+	var config GlobalConfig
+	jsonParser := json.NewDecoder(jsonFile)
+	err = jsonParser.Decode(&config)
+	if err != nil {
+		panic(err)
+	}
+	_ = jsonFile.Close()
+	GenericPingVersion = config.GenericPingVersion
+	GenericPingDescription = config.GenericPingDescription
+}
+
+func DefaultStatusResponse() protocol.Packet {
+	responseJSON := status.ResponseJSON{
+		Version: status.VersionJSON{
+			Name:     GenericPingVersion,
+			Protocol: 0,
+		},
+		Players: status.PlayersJSON{
+			Max:    0,
+			Online: 0,
+		},
+		Description: status.DescriptionJSON{
+			Text: GenericPingDescription,
+		},
+	}
+	bb, _ := json.Marshal(responseJSON)
+
+	return status.ClientBoundResponse{
+		JSONResponse: protocol.String(bb),
+	}.Marshal()
 }
