@@ -115,6 +115,8 @@ func (gateway *Gateway) CloseProxy(proxyUID string) {
 		return
 	}
 
+	playersConnected.Delete(prometheus.Labels{"host": proxy.DomainName()})
+
 	v, ok = gateway.listeners.Load(proxy.ListenTo())
 	if !ok {
 		return
