@@ -21,7 +21,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/oschwald/geoip2-golang v1.6.1
-	github.com/pires/go-proxyproto v0.4.2
+	github.com/pires/go-proxyproto v0.6.1
 	github.com/prometheus/client_golang v1.10.0
 	github.com/sirupsen/logrus v1.7.0 // indirect
 	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781
