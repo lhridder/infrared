@@ -229,6 +229,10 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 
 	v, ok := gateway.proxies.Load(proxyUID)
 	if !ok {
+		if underAttack {
+			_ = conn.Close()
+			return nil
+		}
 		if hs.IsStatusRequest() {
 			_, err := conn.ReadPacket()
 			if err != nil {
@@ -326,24 +330,6 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 
 					_, err = rdb.Get(ctx, "username:"+name).Result()
 					if err == redis.Nil {
-						/*
-							if underAttack {
-								err = conn.WritePacket(login.ClientBoundDisconnect{
-									Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "Please rejoin to verify your connection.")),
-								}.Marshal())
-								if err != nil {
-									log.Println(err)
-								}
-
-								err := conn.Close()
-								if err != nil {
-									log.Println(err)
-								}
-
-								handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": serverAddress, "country": country}).Inc()
-							}
-						*/
-
 						uuid, err := api.FetchUUID(name)
 						if err != nil {
 							err := conn.Close()
@@ -353,7 +339,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 
 							handshakeCount.With(prometheus.Labels{"type": "cancelled_name", "host": serverAddress, "country": country}).Inc()
 							log.Printf("[i] Blocked %s from joining because of name %s", connRemoteAddr, name)
-							return err
+							return nil
 						}
 						log.Printf("[i] Looked up %s with username %s to uuid %s", connRemoteAddr, name, uuid)
 
@@ -386,11 +372,11 @@ func (gateway *Gateway) ClearCps() {
 	if connections >= 20 {
 		underAttack = true
 		underAttackStatus.Set(1)
-		log.Printf("[i] Reached connections treshold: %s", connections)
+		log.Printf("[i] Reached connections treshold: %s", strconv.Itoa(connections))
 		time.Sleep(time.Minute)
 	} else {
 		if underAttack {
-			log.Printf("[i] Disabled connections treshold: %s", connections)
+			log.Printf("[i] Disabled connections treshold: %s", strconv.Itoa(connections))
 			underAttack = false
 			underAttackStatus.Set(0)
 		}
