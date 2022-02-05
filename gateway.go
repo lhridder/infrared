@@ -2,8 +2,11 @@ package infrared
 
 import (
 	"errors"
-	"github.com/haveachin/infrared/callback"
+	"fmt"
+	"github.com/go-redis/redis/v8"
+	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
+	"github.com/haveachin/infrared/protocol/login"
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -11,17 +14,23 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
 	handshakeCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "infrared_handshakes",
 		Help: "The total number of handshakes made to each proxy by type",
-	}, []string{"type", "host"})
-	//TODO make variable
-	underAttack = true
+	}, []string{"type", "host", "country"})
+	underAttackStatus = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "infrared_underAttack",
+		Help: "Is the proxy under attack",
+	})
+	underAttack bool
+	connections int
 )
 
 type Gateway struct {
@@ -192,6 +201,8 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 }
 
 func (gateway *Gateway) serve(conn Conn, addr string) error {
+	connections++
+
 	connRemoteAddr := conn.RemoteAddr()
 	if gateway.receiveProxyProtocol {
 		header, err := proxyproto.Read(conn.Reader())
@@ -201,68 +212,191 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 		connRemoteAddr = header.SourceAddr
 	}
 
-	pk, err := conn.PeekPacket()
+	handshakePacket, err := conn.ReadPacket()
 	if err != nil {
 		return err
 	}
 
-	hs, err := handshaking.UnmarshalServerBoundHandshake(pk)
+	hs, err := handshaking.UnmarshalServerBoundHandshake(handshakePacket)
 	if err != nil {
 		return err
-	}
-
-	country := ""
-	if GeoIPenabled && underAttack {
-		ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
-		record, err := db.Country(net.ParseIP(ip))
-		if err != nil {
-			log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
-		}
-		if contains(CountryWhitelist, record.Country.IsoCode) {
-			//TODO further checks
-		} else {
-			err := conn.Close()
-			if err != nil {
-				log.Println(err)
-			}
-			log.Printf("[i] Blocked %s from joining because of country %s", connRemoteAddr, country)
-			return nil
-		}
 	}
 
 	serverAddress := hs.ParseServerAddress()
-	host := strings.ToLower(strings.Split(serverAddress, "###")[0])
-	if hs.IsLoginRequest() {
-		handshakeCount.With(prometheus.Labels{"type": "login", "host": host}).Inc()
-	} else if hs.IsStatusRequest() {
-		handshakeCount.With(prometheus.Labels{"type": "status", "host": host}).Inc()
-	}
 
 	proxyUID := proxyUID(serverAddress, addr)
-
 	log.Printf("[i] %s requests proxy with UID %s", connRemoteAddr, proxyUID)
+
 	v, ok := gateway.proxies.Load(proxyUID)
 	if !ok {
 		if hs.IsStatusRequest() {
-			conn.ReadPacket()
-			conn.WritePacket(DefaultStatusResponse())
+			_, err := conn.ReadPacket()
+			if err != nil {
+				return err
+			}
+
+			err = conn.WritePacket(DefaultStatusResponse())
+			if err != nil {
+				return err
+			}
+
 			pingPk, _ := conn.ReadPacket()
-			conn.WritePacket(pingPk)
+			err = conn.WritePacket(pingPk)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Client send an invalid address/port; we don't have a v for that address
+		err := conn.WritePacket(login.ClientBoundDisconnect{
+			Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "There is no proxy associated with this domain. Please check your configuration.")),
+		}.Marshal())
+		if err != nil {
+			log.Println(err)
+		}
+
 		return errors.New("no proxy with uid " + proxyUID)
 	}
 	proxy := v.(*Proxy)
 
-	if err := proxy.handleConn(conn, connRemoteAddr); err != nil {
-		proxy.CallbackLogger().LogEvent(callback.ErrorEvent{
-			Error:    err.Error(),
-			ProxyUID: proxyUID,
-		})
-		return err
+	country := ""
+	if hs.IsLoginRequest() {
+		loginPacket, err := conn.ReadPacket()
+		if err != nil {
+			return err
+		}
+		if GeoIPenabled {
+			ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
+			result, err := rdb.Get(ctx, "ip:"+ip).Result()
+			if err == redis.Nil {
+				record, err := db.Country(net.ParseIP(ip))
+				if err != nil {
+					log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
+				}
+
+				country = record.Country.IsoCode
+				if underAttack {
+					err = conn.WritePacket(login.ClientBoundDisconnect{
+						Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "Please rejoin to verify your connection.")),
+					}.Marshal())
+					if err != nil {
+						log.Println(err)
+					}
+
+					err := conn.Close()
+					if err != nil {
+						log.Println(err)
+					}
+
+					if contains(CountryWhitelist, country) {
+						err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						if err != nil {
+							log.Println(err)
+						}
+					} else {
+						err = rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
+						if err != nil {
+							log.Println(err)
+						}
+					}
+					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
+					return nil
+				}
+			} else {
+				results := strings.Split(result, ",")
+				status, _ := strconv.ParseBool(results[0])
+				country = results[1]
+				if status == false && underAttack {
+					err := conn.Close()
+					if err != nil {
+						log.Println(err)
+					}
+					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
+					rdb.TTL(ctx, "ip:"+ip).SetVal(time.Hour * 12)
+					log.Printf("[i] Blocked %s from joining because of country %s", connRemoteAddr, country)
+					return nil
+				}
+				if MojangAPIenabled {
+					ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
+					if err != nil {
+						log.Println(err)
+					}
+
+					name := string(ls.Name)
+
+					_, err = rdb.Get(ctx, "username:"+name).Result()
+					if err == redis.Nil {
+						/*
+							if underAttack {
+								err = conn.WritePacket(login.ClientBoundDisconnect{
+									Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "Please rejoin to verify your connection.")),
+								}.Marshal())
+								if err != nil {
+									log.Println(err)
+								}
+
+								err := conn.Close()
+								if err != nil {
+									log.Println(err)
+								}
+
+								handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": serverAddress, "country": country}).Inc()
+							}
+						*/
+
+						uuid, err := api.FetchUUID(name)
+						if err != nil {
+							err := conn.Close()
+							if err != nil {
+								log.Println(err)
+							}
+
+							handshakeCount.With(prometheus.Labels{"type": "cancelled_name", "host": serverAddress, "country": country}).Inc()
+							log.Printf("[i] Blocked %s from joining because of name %s", connRemoteAddr, name)
+							return err
+						}
+						log.Printf("[i] Looked up %s with username %s to uuid %s", connRemoteAddr, name, uuid)
+
+						err = rdb.Set(ctx, "username:"+name, "true", time.Hour*12).Err()
+						if err != nil {
+							log.Println(err)
+						}
+					} else {
+						rdb.TTL(ctx, "username:"+name).SetVal(time.Hour * 12)
+					}
+				}
+			}
+		}
+		handshakeCount.With(prometheus.Labels{"type": "login", "host": serverAddress, "country": country}).Inc()
+		if err := proxy.handleConn(conn, connRemoteAddr, handshakePacket, loginPacket); err != nil {
+			return err
+		}
+	}
+
+	if hs.IsStatusRequest() {
+		handshakeCount.With(prometheus.Labels{"type": "status", "host": serverAddress, "country": country}).Inc()
+		if err := proxy.handleConn(conn, connRemoteAddr, handshakePacket, handshakePacket); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func (gateway *Gateway) ClearCps() {
+	if connections >= 20 {
+		underAttack = true
+		underAttackStatus.Set(1)
+		log.Printf("[i] Reached connections treshold: %s", connections)
+		time.Sleep(time.Minute)
+	} else {
+		if underAttack {
+			log.Printf("[i] Disabled connections treshold: %s", connections)
+			underAttack = false
+			underAttackStatus.Set(0)
+		}
+	}
+	connections = 0
+	time.Sleep(time.Second)
 }
 
 func contains(s []string, str string) bool {

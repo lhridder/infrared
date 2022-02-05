@@ -48,7 +48,11 @@ type GlobalConfig struct {
 	GenericPingDescription string   `json:"genericPingDescription"`
 	GeoIPenabled           bool     `json:"geoIPenabled"`
 	GeoIPdatabasefile      string   `json:"geoIPdatabasefile"`
-	CountryWhitelist       []string `json:"countryWhitelist"`
+	GeoIPCountryWhitelist  []string `json:"geoIPcountryWhitelist"`
+	MojangAPIenabled       bool     `json:"mojangAPIenabled"`
+	RedisHost              string   `json:"redisHost"`
+	RedisDB                int      `json:"redisDB"`
+	RedisPass              string   `json:"redisPass"`
 }
 
 var (
@@ -57,6 +61,10 @@ var (
 	GeoIPenabled           = false
 	GeoIPdatabasefile      string
 	CountryWhitelist       []string
+	MojangAPIenabled       = false
+	RedisHost              = ""
+	RedisDB                = 0
+	RedisPass              = ""
 )
 
 func (cfg *ProxyConfig) Dialer() (*Dialer, error) {
@@ -443,7 +451,11 @@ func LoadGlobalConfig() {
 	GenericPingDescription = config.GenericPingDescription
 	GeoIPenabled = config.GeoIPenabled
 	GeoIPdatabasefile = config.GeoIPdatabasefile
-	CountryWhitelist = config.CountryWhitelist
+	CountryWhitelist = config.GeoIPCountryWhitelist
+	MojangAPIenabled = config.MojangAPIenabled
+	RedisHost = config.RedisHost
+	RedisDB = config.RedisDB
+	RedisPass = config.RedisPass
 }
 
 func DefaultStatusResponse() protocol.Packet {

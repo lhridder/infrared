@@ -1,22 +1,24 @@
 package infrared
 
 import (
+	"context"
 	"fmt"
-	"github.com/oschwald/geoip2-golang"
-	"log"
-	"net"
-	"strings"
-	"sync"
-	"time"
-
+	"github.com/Lukaesebrot/mojango"
+	"github.com/go-redis/redis/v8"
 	"github.com/haveachin/infrared/callback"
 	"github.com/haveachin/infrared/process"
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
+	"github.com/oschwald/geoip2-golang"
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"log"
+	"net"
+	"strings"
+	"sync"
+	"time"
 )
 
 var (
@@ -24,7 +26,10 @@ var (
 		Name: "infrared_connected",
 		Help: "The total number of connected players",
 	}, []string{"host"})
-	db *geoip2.Reader
+	db  *geoip2.Reader
+	api *mojango.Client
+	rdb *redis.Client
+	ctx = context.Background()
 )
 
 func proxyUID(domain, addr string) string {
@@ -33,6 +38,23 @@ func proxyUID(domain, addr string) string {
 
 func LoadDB() {
 	db, _ = geoip2.Open(GeoIPdatabasefile)
+}
+
+func LoadMojangAPI() {
+	api = mojango.New()
+}
+
+func ConnectRedis() error {
+	rdb = redis.NewClient(&redis.Options{
+		Addr:     RedisHost + ":6379",
+		Password: RedisPass, // no password set
+		DB:       RedisDB,   // use default DB
+	})
+	_, err := rdb.Ping(ctx).Result()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type Proxy struct {
@@ -205,13 +227,8 @@ func (proxy *Proxy) logEvent(event callback.Event) {
 	}
 }
 
-func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
-	pk, err := conn.ReadPacket()
-	if err != nil {
-		return err
-	}
-
-	hs, err := handshaking.UnmarshalServerBoundHandshake(pk)
+func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePacket protocol.Packet, loginPacket protocol.Packet) error {
+	hs, err := handshaking.UnmarshalServerBoundHandshake(handshakePacket)
 	if err != nil {
 		return err
 	}
@@ -223,16 +240,6 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
 	dialer, err := proxy.Dialer()
 	if err != nil {
 		return err
-	}
-
-	country := ""
-	if GeoIPenabled {
-		ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
-		record, err := db.Country(net.ParseIP(ip))
-		if err != nil {
-			log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
-		}
-		country = record.Country.IsoCode
 	}
 
 	rconn, err := dialer.Dial(proxyTo)
@@ -269,19 +276,25 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr) error {
 
 	if proxy.RealIP() {
 		hs.UpgradeToRealIP(connRemoteAddr, time.Now())
-		pk = hs.Marshal()
+		handshakePacket = hs.Marshal()
 	}
 
-	if err := rconn.WritePacket(pk); err != nil {
+	if err := rconn.WritePacket(handshakePacket); err != nil {
 		return err
 	}
 
 	if hs.IsLoginRequest() {
 		proxy.cancelProcessTimeout()
-		username, err := proxy.sniffUsername(conn, rconn, connRemoteAddr, country)
+		ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
 		if err != nil {
 			return err
 		}
+		username := string(ls.Name)
+		err = rconn.WritePacket(loginPacket)
+		if err != nil {
+			return err
+		}
+		log.Printf("[i] %s with username %s connects through %s", connRemoteAddr, username, proxy.UID())
 		proxy.addPlayer(conn, username)
 		proxy.logEvent(callback.PlayerJoinEvent{
 			Username:      username,
@@ -381,21 +394,6 @@ func (proxy *Proxy) cancelProcessTimeout() {
 
 	proxy.cancelTimeoutFunc()
 	proxy.cancelTimeoutFunc = nil
-}
-
-func (proxy *Proxy) sniffUsername(conn, rconn Conn, connRemoteAddr net.Addr, country string) (string, error) {
-	pk, err := conn.ReadPacket()
-	if err != nil {
-		return "", err
-	}
-	rconn.WritePacket(pk)
-
-	ls, err := login.UnmarshalServerBoundLoginStart(pk)
-	if err != nil {
-		return "", err
-	}
-	log.Printf("[i] %s with username %s from %s connects through %s", connRemoteAddr, ls.Name, country, proxy.UID())
-	return string(ls.Name), nil
 }
 
 func (proxy *Proxy) handleLoginRequest(conn Conn) error {
