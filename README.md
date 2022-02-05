@@ -2,55 +2,16 @@
    <img width="300" height="auto" src="https://i.imgur.com/sD8cjJc.png">
  </p>
 
-[![Discord](https://img.shields.io/discord/800456341088370698?label=discord&logo=discord)](https://discord.gg/r98YPRsZAx)
-[![Docker Pulls](https://img.shields.io/docker/pulls/haveachin/infrared?logo=docker)](https://hub.docker.com/r/haveachin/infrared)
-
-![build](https://github.com/haveachin/infrared/actions/workflows/test.yml/badge.svg)
-[![GitHub](https://img.shields.io/github/license/haveachin/infrared)](https://raw.githubusercontent.com/haveachin/infrared/master/LICENSE)
-
 # Infrared - a Minecraft Proxy
 
-An ultra lightweight Minecraft reverse proxy and idle placeholder:
-Ever wanted to have only one exposed port on your server for multiple Minecraft servers?
-Then Infrared is the tool you need!
-Infrared works as a reverse proxy using a subdomain to connect clients to a specific Minecraft server.
-It works similar to Nginx for those of you who are familiar. 
+fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 
-## Features
+## Added/changed Features
 
-- [x] Reverse Proxy
-- [x] Display Placeholder Server
-- [x] Autostart Server when pinged
-- [x] Logger Callback URLs
-- [x] HAProxy Protocol Support
-- [x] TCPShield/RealIP Protocol Support
-- [X] Prometheus Support
-- [ ] REST API
-
-## Deploy
-
-```shell script
-$ docker build --no-cache -t haveachin/infrared:latest https://github.com/haveachin/infrared.git &&
-  docker image prune -f --filter label=stage=intermediate &&
-  docker run -d --name infrared --restart=unless-stopped -it -v /usr/local/infrared/configs/:/configs -p 25565:25565/tcp --expose 25565 haveachin/infrared:latest
-```
-
-## Update
-
-```shell script
-$ docker build --no-cache -t haveachin/infrared:latest https://github.com/haveachin/infrared.git &&
-  docker image prune -f --filter label=stage=intermediate &&
-  docker stop infrared &&
-  docker rm infrared &&
-  docker run -d --name infrared --restart=unless-stopped -it -v /usr/local/infrared/configs/:/configs -p 25565:25565/tcp --expose 25565 haveachin/infrared:latest
-```
-
-## Environment Variables
-
-**Info**: Command-line flags override environment variables.
-
-`INFRARED_CONFIG_PATH` is the path to all your server configs [default: `"./configs/"`]
-`INFRARED_RECEIVE_PROXY_PROTOCOL` if Infrared should be able to receive proxy protocol [default: `"false"`]
+- Default placeholder for invalid domain and kick message
+- Antibot based on geoip lookups and username lookups
+- Added handshakes and blocked connections to prometheus exporter
+- Allow multiple domains in 1 configfile
 
 ## Command-Line Flags
 
@@ -70,7 +31,7 @@ $ docker build --no-cache -t haveachin/infrared:latest https://github.com/haveac
 
 | Field Name        | Type    | Required | Default                                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |-------------------|---------|----------|------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| domainName        | String  | true     | localhost                                      | Should be [fully qualified domain name](https://en.wikipedia.org/wiki/Domain_name). <br>Note: Every string is accepted. So `localhost` is also valid.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| domainNames       | String[]  | true     | localhost                                      | Should be [fully qualified domain name](https://en.wikipedia.org/wiki/Domain_name). <br>Note: Every string is accepted. So `localhost` is also valid.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | listenTo          | String  | true     | :25565                                         | The address (usually just the port; so short term `:port`) that the proxy should listen to for incoming connections.<br>Accepts basically every address format you throw at it. Valid examples: `:25565`, `localhost:25565`, `0.0.0.0:25565`, `127.0.0.1:25565`, `example.de:25565`                                                                                                                                                                                                                                                                                                        |
 | proxyTo           | String  | true     |                                                | The address that the proxy should send incoming connections to. Accepts Same formats as the `listenTo` field.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | proxyBind         | String  | false    |                                                | The local IP that is being used to dail to the server on `proxyTo`. (Same as Nginx `proxy-bind`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -83,25 +44,6 @@ $ docker build --no-cache -t haveachin/infrared:latest https://github.com/haveac
 | offlineStatus     | Object  | false    | See [Response Status](#response-status)        | This is the response that Infrared will give when a client asks for the server status and the server is offline.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | callbackServer    | Object  | false    | See [Callback Server](#callback-server)        | Optional callback server configuration to send events as a POST request to a specified URL.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-### Docker
-
-| Field Name    | Type   | Required | Default    | Description                                                                 |
-|---------------|--------|----------|------------|-----------------------------------------------------------------------------|
-| dnsServer     | String | false    | 127.0.0.11 | The address of the DNS that resolves the container names.                   |
-| containerName | String | true     |            | The name of the container that should be automatically started/stopped.     |
-| portainer     | Object | false    |            | Optional [Portainer](#Portainer) configuration for authorization management.|
-
-#### Portainer
-
-More info on [Portainer](https://www.portainer.io/).
-
-| Field Name | Type   | Required | Default | Description                                                                   |
-|------------|--------|----------|---------|-------------------------------------------------------------------------------|
-| address    | String | true     |         | URL of the Portainer instance.                                                |
-| endpointId | String | true     |         | The ID typically an integer of the docker endpoint in the portainer instance. |
-| username   | String | true     |         | Username for the Portainer user.                                              |
-| password   | String | true     |         | Password for the Portainer user.                                              |
-
 ### Response Status
 
 | Field Name     | Type    | Required | Default         | Description                                                                                                                                          |
@@ -113,21 +55,6 @@ More info on [Portainer](https://www.portainer.io/).
 | playerSamples  | Array   | false    |                 | An array of player samples. See [Player Sample](#Player Sample).                                                                                     |
 | iconPath       | String  | false    |                 | The path to the server icon.                                                                                                                         |
 | motd           | String  | false    |                 | The motto of the day, short MOTD.                                                                                                                    |
-
-#### Player Sample
-
-| Field Name | Type   | Required | Default | Description             |
-|------------|--------|----------|---------|-------------------------|
-| Name       | String | true     |         | Username of the player. |
-| uuid       | String | false    |         | UUID of the player.     |
-
-### Callback Server
-
-| Field Name | Type   | Required | Default | Description                                                                                                                                                                                                                                                                             |
-|------------|--------|----------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| url        | String | true     |         | URL of the callback server URL.                                                                                                                                                                                                                                                         |
-| events     | Array  | true     |         | A string array of event names. Currently available event names are:<br>- `Error` will send error logs<br>- `PlayerJoin` will send player joins<br>- `PlayerLeave` will send player leaves<br>- `ContainerStart` will send container starts<br>- `ContainerStop` will send container stops |
-
 
 ### Examples
 
@@ -232,5 +159,6 @@ scrape_configs:
 * infrared_handshakes: counter of the number of handshake packets received per instande, type and target:
   * **Example response:** `infrared_handshakes{instance="vps1.example.com:9070",type="status",host="proxy.example.com"} 5`
   * **instance:** what infrared instance handshakes were received on.
-  * **type:** the type of handshake received; "status" or "login".
+  * **type:** the type of handshake received; "status", "login", "cancelled_host" and "cancelled_name".
+  * **country:** country where the player ip is from.
   * **host:** the target host specified by the "Server Address" field in the handshake packet. [[1]](https://wiki.vg/Protocol#Handshaking)
