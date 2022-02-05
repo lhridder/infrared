@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/Lukaesebrot/mojango v0.0.0-20200623100037-76cbec69139f
 	github.com/Microsoft/go-winio v0.4.16 // indirect
+	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/containerd/containerd v1.4.3 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v20.10.3+incompatible

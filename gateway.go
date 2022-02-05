@@ -3,6 +3,7 @@ package infrared
 import (
 	"errors"
 	"fmt"
+	"github.com/asaskevich/govalidator"
 	"github.com/go-redis/redis/v8"
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
@@ -223,6 +224,9 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 	}
 
 	serverAddress := hs.ParseServerAddress()
+	if !govalidator.IsDNSName(serverAddress) && !govalidator.IsIP(serverAddress) {
+		return errors.New(serverAddress + " is not a valid domain")
+	}
 
 	proxyUID := proxyUID(serverAddress, addr)
 	log.Printf("[i] %s requests proxy with UID %s", connRemoteAddr, proxyUID)
@@ -263,6 +267,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 	}
 	proxy := v.(*Proxy)
 
+	ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
 	country := ""
 	if hs.IsLoginRequest() {
 		loginPacket, err := conn.ReadPacket()
@@ -270,7 +275,6 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 			return err
 		}
 		if GeoIPenabled {
-			ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
 			result, err := rdb.Get(ctx, "ip:"+ip).Result()
 			if err == redis.Nil {
 				record, err := db.Country(net.ParseIP(ip))
@@ -324,6 +328,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 					ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
 					if err != nil {
 						log.Println(err)
+						return err
 					}
 
 					name := string(ls.Name)
@@ -360,6 +365,11 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 	}
 
 	if hs.IsStatusRequest() {
+		record, err := db.Country(net.ParseIP(ip))
+		country = record.Country.IsoCode
+		if err != nil {
+			log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
+		}
 		handshakeCount.With(prometheus.Labels{"type": "status", "host": serverAddress, "country": country}).Inc()
 		if err := proxy.handleConn(conn, connRemoteAddr, handshakePacket, handshakePacket); err != nil {
 			return err
