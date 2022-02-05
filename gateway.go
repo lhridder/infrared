@@ -352,8 +352,16 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 						if err != nil {
 							log.Println(err)
 						}
+						err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						if err != nil {
+							log.Println(err)
+						}
 					} else {
 						rdb.TTL(ctx, "username:"+name).SetVal(time.Hour * 12)
+						err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						if err != nil {
+							log.Println(err)
+						}
 					}
 				}
 			}
