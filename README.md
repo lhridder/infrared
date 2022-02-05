@@ -12,6 +12,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 - Antibot based on geoip lookups and username lookups
 - Added handshakes and blocked connections to prometheus exporter
 - Allow multiple domains in 1 configfile
+- Global .json config
 
 ## Command-Line Flags
 
