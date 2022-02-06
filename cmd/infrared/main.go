@@ -2,11 +2,10 @@ package main
 
 import (
 	"flag"
+	"github.com/haveachin/infrared"
 	"log"
 	"os"
 	"strconv"
-
-	"github.com/haveachin/infrared"
 )
 
 const (
@@ -83,11 +82,10 @@ func main() {
 			log.Println(err)
 			return
 		}
-	}
-
-	if infrared.MojangAPIenabled {
-		log.Println("Loading Mojang API instance")
-		infrared.LoadMojangAPI()
+		if infrared.MojangAPIenabled {
+			log.Println("Loading Mojang API instance")
+			infrared.LoadMojangAPI()
+		}
 	}
 
 	log.Println("Loading proxy configs")
