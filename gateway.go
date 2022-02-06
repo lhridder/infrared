@@ -1,13 +1,16 @@
 package infrared
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/Lukaesebrot/mojango"
 	"github.com/asaskevich/govalidator"
 	"github.com/go-redis/redis/v8"
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
+	"github.com/oschwald/geoip2-golang"
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -32,6 +35,10 @@ var (
 	})
 	underAttack bool
 	connections int
+	db          *geoip2.Reader
+	api         *mojango.Client
+	rdb         *redis.Client
+	ctx         = context.Background()
 )
 
 type Gateway struct {
@@ -40,6 +47,27 @@ type Gateway struct {
 	closed               chan bool
 	wg                   sync.WaitGroup
 	receiveProxyProtocol bool
+}
+
+func LoadDB() {
+	db, _ = geoip2.Open(GeoIPdatabasefile)
+}
+
+func LoadMojangAPI() {
+	api = mojango.New()
+}
+
+func ConnectRedis() error {
+	rdb = redis.NewClient(&redis.Options{
+		Addr:     RedisHost + ":6379",
+		Password: RedisPass,
+		DB:       RedisDB,
+	})
+	_, err := rdb.Ping(ctx).Result()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (gateway *Gateway) ListenAndServe(proxies []*Proxy) error {
@@ -149,10 +177,6 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 
 	playersConnected.WithLabelValues(proxy.DomainName())
 
-	// Disabled because since the host is taken from the packet anyway
-	//handshakeCount.WithLabelValues("login", proxy.DomainName())
-	//handshakeCount.WithLabelValues("status", proxy.DomainName())
-
 	// Check if a gate is already listening to the Proxy address
 	addr := proxy.ListenTo()
 	if _, ok := gateway.listeners.Load(addr); ok {
@@ -181,8 +205,7 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			// TODO: Refactor this; it feels hacky
-			if err.Error() == "use of closed network connection" {
+			if errors.Is(err, net.ErrClosed) {
 				log.Println("Closing listener on", addr)
 				gateway.listeners.Delete(addr)
 				return nil
@@ -203,7 +226,20 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 	}
 }
 
-func (gateway *Gateway) serve(conn Conn, addr string) error {
+func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			switch x := r.(type) {
+			case string:
+				rerr = errors.New(x)
+			case error:
+				rerr = x
+			default:
+				rerr = errors.New("unknown panic in client handler")
+			}
+		}
+	}()
+
 	connections++
 
 	connRemoteAddr := conn.RemoteAddr()
@@ -309,10 +345,28 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 							log.Println(err)
 						}
 					}
+
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
-					return nil
+					return errors.New("blocked")
+				} else {
+					if contains(CountryWhitelist, country) {
+						err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						if err != nil {
+							log.Println(err)
+						}
+					}
 				}
 			} else {
+				if err != nil {
+					if err == redis.ErrClosed {
+						err := ConnectRedis()
+						if err != nil {
+							return err
+						}
+					} else {
+						return err
+					}
+				}
 				results := strings.Split(result, ",")
 				status, _ := strconv.ParseBool(results[0])
 				country = results[1]
@@ -323,31 +377,30 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 					}
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
 					rdb.TTL(ctx, "ip:"+ip).SetVal(time.Hour * 12)
-					log.Printf("[i] Blocked %s from joining because of country %s", connRemoteAddr, country)
-					return nil
+					log.Printf("[i] Blocked %s from joining because they joined during an attack.", connRemoteAddr)
+					return errors.New("blocked")
 				}
-				if MojangAPIenabled {
-					ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
+			}
+			if MojangAPIenabled {
+				ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
+				if err != nil {
+					return err
+				}
+
+				name := string(ls.Name)
+
+				_, err = rdb.Get(ctx, "username:"+name).Result()
+				if err == redis.Nil {
+					uuid, err := api.FetchUUID(name)
 					if err != nil {
-						log.Println(err)
-						return err
-					}
-
-					name := string(ls.Name)
-
-					_, err = rdb.Get(ctx, "username:"+name).Result()
-					if err == redis.Nil {
-						uuid, err := api.FetchUUID(name)
-						if err != nil {
-							err := conn.Close()
-							if err != nil {
-								log.Println(err)
-							}
-
+						if err == mojango.ErrNoContent || err == mojango.ErrTooManyRequests {
 							handshakeCount.With(prometheus.Labels{"type": "cancelled_name", "host": serverAddress, "country": country}).Inc()
 							log.Printf("[i] Blocked %s from joining because of name %s", connRemoteAddr, name)
-							return nil
+							return errors.New("blocked")
+						} else {
+							return errors.New("Could not query Mojang: " + err.Error())
 						}
+					} else {
 						log.Printf("[i] Looked up %s with username %s to uuid %s", connRemoteAddr, name, uuid)
 
 						err = rdb.Set(ctx, "username:"+name, "true", time.Hour*12).Err()
@@ -358,12 +411,22 @@ func (gateway *Gateway) serve(conn Conn, addr string) error {
 						if err != nil {
 							log.Println(err)
 						}
-					} else {
-						rdb.TTL(ctx, "username:"+name).SetVal(time.Hour * 12)
-						err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
-						if err != nil {
-							log.Println(err)
+					}
+				} else {
+					if err != nil {
+						if err == redis.ErrClosed {
+							err := ConnectRedis()
+							if err != nil {
+								return err
+							}
+						} else {
+							return err
 						}
+					}
+					rdb.TTL(ctx, "username:"+name).SetVal(time.Hour * 12)
+					err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+					if err != nil {
+						log.Println(err)
 					}
 				}
 			}

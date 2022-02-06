@@ -1,16 +1,12 @@
 package infrared
 
 import (
-	"context"
 	"fmt"
-	"github.com/Lukaesebrot/mojango"
-	"github.com/go-redis/redis/v8"
 	"github.com/haveachin/infrared/callback"
 	"github.com/haveachin/infrared/process"
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
-	"github.com/oschwald/geoip2-golang"
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -26,35 +22,10 @@ var (
 		Name: "infrared_connected",
 		Help: "The total number of connected players",
 	}, []string{"host"})
-	db  *geoip2.Reader
-	api *mojango.Client
-	rdb *redis.Client
-	ctx = context.Background()
 )
 
 func proxyUID(domain, addr string) string {
 	return fmt.Sprintf("%s@%s", strings.ToLower(domain), addr)
-}
-
-func LoadDB() {
-	db, _ = geoip2.Open(GeoIPdatabasefile)
-}
-
-func LoadMojangAPI() {
-	api = mojango.New()
-}
-
-func ConnectRedis() error {
-	rdb = redis.NewClient(&redis.Options{
-		Addr:     RedisHost + ":6379",
-		Password: RedisPass, // no password set
-		DB:       RedisDB,   // use default DB
-	})
-	_, err := rdb.Ping(ctx).Result()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 type Proxy struct {
