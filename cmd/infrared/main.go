@@ -67,21 +67,6 @@ func main() {
 	log.Println("Loading global config")
 	infrared.LoadGlobalConfig()
 
-	if infrared.GeoIPenabled {
-		log.Println("Loading GeoIPDB")
-		infrared.LoadDB()
-		log.Println("Loading Redis")
-		err := infrared.ConnectRedis()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		if infrared.MojangAPIenabled {
-			log.Println("Loading Mojang API instance")
-			infrared.LoadMojangAPI()
-		}
-	}
-
 	log.Println("Loading proxy configs")
 
 	cfgs, err := infrared.LoadProxyConfigsFromPath(configPath, false)
@@ -120,8 +105,31 @@ func main() {
 		}
 	}()
 
-	if prometheusEnabled {
-		gateway.EnablePrometheus(prometheusBind)
+	if infrared.GeoIPenabled {
+		log.Println("Loading GeoIPDB")
+		gateway.LoadDB()
+		log.Println("Loading Redis")
+		err := gateway.ConnectRedis()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		if infrared.MojangAPIenabled {
+			log.Println("Loading Mojang API instance")
+			gateway.LoadMojangAPI()
+			err := gateway.GenerateKeys()
+			if err != nil {
+				return
+			}
+		}
+	}
+
+	if infrared.PrometheusEnabled {
+		err := gateway.EnablePrometheus(infrared.PrometheusBind)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 	}
 
 	go func() {

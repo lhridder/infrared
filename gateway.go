@@ -2,6 +2,9 @@ package infrared
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"github.com/Lukaesebrot/mojango"
@@ -33,12 +36,7 @@ var (
 		Name: "infrared_underAttack",
 		Help: "Is the proxy under attack",
 	})
-	underAttack bool
-	connections int
-	db          *geoip2.Reader
-	api         *mojango.Client
-	rdb         *redis.Client
-	ctx         = context.Background()
+	ctx = context.Background()
 )
 
 type Gateway struct {
@@ -47,23 +45,29 @@ type Gateway struct {
 	closed               chan bool
 	wg                   sync.WaitGroup
 	receiveProxyProtocol bool
+	underAttack          bool
+	connections          int
+	db                   *geoip2.Reader
+	api                  *mojango.Client
+	rdb                  *redis.Client
+	publicKey            []byte
 }
 
-func LoadDB() {
-	db, _ = geoip2.Open(GeoIPdatabasefile)
+func (gateway *Gateway) LoadDB() {
+	gateway.db, _ = geoip2.Open(GeoIPdatabasefile)
 }
 
-func LoadMojangAPI() {
-	api = mojango.New()
+func (gateway *Gateway) LoadMojangAPI() {
+	gateway.api = mojango.New()
 }
 
-func ConnectRedis() error {
-	rdb = redis.NewClient(&redis.Options{
+func (gateway *Gateway) ConnectRedis() error {
+	gateway.rdb = redis.NewClient(&redis.Options{
 		Addr:     RedisHost + ":6379",
 		Password: RedisPass,
 		DB:       RedisDB,
 	})
-	_, err := rdb.Ping(ctx).Result()
+	_, err := gateway.rdb.Ping(ctx).Result()
 	if err != nil {
 		return err
 	}
@@ -99,6 +103,19 @@ func (gateway *Gateway) EnablePrometheus(bind string) error {
 	}()
 
 	log.Println("Enabling Prometheus metrics endpoint on", bind)
+	return nil
+}
+
+func (gateway *Gateway) GenerateKeys() error {
+	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		return err
+	}
+
+	gateway.publicKey, err = x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -240,7 +257,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 		}
 	}()
 
-	connections++
+	gateway.connections++
 
 	connRemoteAddr := conn.RemoteAddr()
 	if gateway.receiveProxyProtocol {
@@ -271,7 +288,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 
 	v, ok := gateway.proxies.Load(proxyUID)
 	if !ok {
-		if underAttack {
+		if gateway.underAttack {
 			_ = conn.Close()
 			return nil
 		}
@@ -313,15 +330,15 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			return err
 		}
 		if GeoIPenabled {
-			result, err := rdb.Get(ctx, "ip:"+ip).Result()
+			result, err := gateway.rdb.Get(ctx, "ip:"+ip).Result()
 			if err == redis.Nil {
-				record, err := db.Country(net.ParseIP(ip))
+				record, err := gateway.db.Country(net.ParseIP(ip))
 				if err != nil {
 					log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
 				}
 
 				country = record.Country.IsoCode
-				if underAttack {
+				if gateway.underAttack {
 					err = conn.WritePacket(login.ClientBoundDisconnect{
 						Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "Please rejoin to verify your connection.")),
 					}.Marshal())
@@ -335,12 +352,12 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 					}
 
 					if contains(CountryWhitelist, country) {
-						err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
 						if err != nil {
 							log.Println(err)
 						}
 					} else {
-						err = rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
+						err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
 						if err != nil {
 							log.Println(err)
 						}
@@ -350,7 +367,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 					return errors.New("blocked")
 				} else {
 					if contains(CountryWhitelist, country) {
-						err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
 						if err != nil {
 							log.Println(err)
 						}
@@ -359,7 +376,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			} else {
 				if err != nil {
 					if err == redis.ErrClosed {
-						err := ConnectRedis()
+						err := gateway.ConnectRedis()
 						if err != nil {
 							return err
 						}
@@ -370,18 +387,50 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 				results := strings.Split(result, ",")
 				status, _ := strconv.ParseBool(results[0])
 				country = results[1]
-				if status == false && underAttack {
+				if status == false && gateway.underAttack {
 					err := conn.Close()
 					if err != nil {
 						log.Println(err)
 					}
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
-					rdb.TTL(ctx, "ip:"+ip).SetVal(time.Hour * 12)
+					gateway.rdb.TTL(ctx, "ip:"+ip).SetVal(time.Hour * 12)
 					log.Printf("[i] Blocked %s from joining because they joined during an attack.", connRemoteAddr)
 					return errors.New("blocked")
 				}
 			}
 			if MojangAPIenabled {
+				if gateway.underAttack {
+					verifyToken := make([]byte, 4)
+					if _, err := rand.Read(verifyToken); err != nil {
+						return err
+					}
+
+					err = conn.WritePacket(login.ClientBoundEncryptionRequest{
+						ServerID:    "",
+						PublicKey:   gateway.publicKey,
+						VerifyToken: verifyToken,
+					}.Marshal())
+					if err != nil {
+						return err
+					}
+
+					encryptionResponse, err := conn.ReadPacket()
+					_, err = login.UnmarshalServerBoundEncryptionResponse(encryptionResponse)
+					if err != nil {
+						handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": serverAddress, "country": country}).Inc()
+						err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
+						return errors.New("invalid login response")
+					}
+
+					err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+					if err != nil {
+						log.Println(err)
+					}
+
+					handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": serverAddress, "country": country}).Inc()
+					return errors.New("blocked")
+				}
+
 				ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
 				if err != nil {
 					return err
@@ -389,25 +438,25 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 
 				name := string(ls.Name)
 
-				_, err = rdb.Get(ctx, "username:"+name).Result()
+				_, err = gateway.rdb.Get(ctx, "username:"+name).Result()
 				if err == redis.Nil {
-					uuid, err := api.FetchUUID(name)
+					uuid, err := gateway.api.FetchUUID(name)
 					if err != nil {
 						if err == mojango.ErrNoContent || err == mojango.ErrTooManyRequests {
 							handshakeCount.With(prometheus.Labels{"type": "cancelled_name", "host": serverAddress, "country": country}).Inc()
 							log.Printf("[i] Blocked %s from joining because of name %s", connRemoteAddr, name)
-							return errors.New("blocked")
+							return errors.New("blocked because name")
 						} else {
 							return errors.New("Could not query Mojang: " + err.Error())
 						}
 					} else {
 						log.Printf("[i] Looked up %s with username %s to uuid %s", connRemoteAddr, name, uuid)
 
-						err = rdb.Set(ctx, "username:"+name, "true", time.Hour*12).Err()
+						err = gateway.rdb.Set(ctx, "username:"+name, "true", time.Hour*12).Err()
 						if err != nil {
 							log.Println(err)
 						}
-						err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
 						if err != nil {
 							log.Println(err)
 						}
@@ -415,7 +464,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 				} else {
 					if err != nil {
 						if err == redis.ErrClosed {
-							err := ConnectRedis()
+							err := gateway.ConnectRedis()
 							if err != nil {
 								return err
 							}
@@ -423,8 +472,8 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 							return err
 						}
 					}
-					rdb.TTL(ctx, "username:"+name).SetVal(time.Hour * 12)
-					err = rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+					gateway.rdb.TTL(ctx, "username:"+name).SetVal(time.Hour * 12)
+					err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
 					if err != nil {
 						log.Println(err)
 					}
@@ -438,7 +487,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	}
 
 	if hs.IsStatusRequest() {
-		record, err := db.Country(net.ParseIP(ip))
+		record, err := gateway.db.Country(net.ParseIP(ip))
 		country = record.Country.IsoCode
 		if err != nil {
 			log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
@@ -452,19 +501,19 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 }
 
 func (gateway *Gateway) ClearCps() {
-	if connections >= 20 {
-		underAttack = true
+	if gateway.connections >= 20 {
+		gateway.underAttack = true
 		underAttackStatus.Set(1)
-		log.Printf("[i] Reached connections treshold: %s", strconv.Itoa(connections))
+		log.Printf("[i] Reached connections treshold: %s", strconv.Itoa(gateway.connections))
 		time.Sleep(time.Minute)
 	} else {
-		if underAttack {
-			log.Printf("[i] Disabled connections treshold: %s", strconv.Itoa(connections))
-			underAttack = false
+		if gateway.underAttack {
+			log.Printf("[i] Disabled connections treshold: %s", strconv.Itoa(gateway.connections))
+			gateway.underAttack = false
 			underAttackStatus.Set(0)
 		}
 	}
-	connections = 0
+	gateway.connections = 0
 	time.Sleep(time.Second)
 }
 
