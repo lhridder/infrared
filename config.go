@@ -44,6 +44,8 @@ type ProxyConfig struct {
 }
 
 type GlobalConfig struct {
+	PrometheusEnabled      bool     `json:"prometheusEnabled"`
+	PrometheusBind         string   `json:"prometheusBind"`
 	GenericPingVersion     string   `json:"genericPingVersion"`
 	GenericPingDescription string   `json:"genericPingDescription"`
 	GeoIPenabled           bool     `json:"geoIPenabled"`
@@ -56,6 +58,8 @@ type GlobalConfig struct {
 }
 
 var (
+	PrometheusEnabled      = false
+	PrometheusBind         = ":9100"
 	GenericPingVersion     = "Infrared"
 	GenericPingDescription = "There is no proxy associated with this domain. Please check your configuration."
 	GeoIPenabled           = false
@@ -213,10 +217,10 @@ func DefaultProxyConfig() ProxyConfig {
 			Timeout:   300000,
 		},
 		OfflineStatus: StatusConfig{
-			VersionName:    "Infrared 1.18",
+			VersionName:    GenericPingVersion,
 			ProtocolNumber: 757,
 			MaxPlayers:     20,
-			MOTD:           "Powered by Infrared",
+			MOTD:           "Server is currently offline.",
 		},
 	}
 }
@@ -447,6 +451,8 @@ func LoadGlobalConfig() {
 		panic(err)
 	}
 	_ = jsonFile.Close()
+	PrometheusEnabled = config.PrometheusEnabled
+	PrometheusBind = config.PrometheusBind
 	GenericPingVersion = config.GenericPingVersion
 	GenericPingDescription = config.GenericPingDescription
 	GeoIPenabled = config.GeoIPenabled
