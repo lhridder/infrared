@@ -305,6 +305,9 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 
 			pingPk, _ := conn.ReadPacket()
 			err = conn.WritePacket(pingPk)
+
+			handshakeCount.With(prometheus.Labels{"type": "status", "host": serverAddress, "country": ""}).Inc()
+
 			if err != nil {
 				return err
 			}
@@ -317,6 +320,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 		if err != nil {
 			log.Println(err)
 		}
+		handshakeCount.With(prometheus.Labels{"type": "login", "host": serverAddress, "country": ""}).Inc()
 
 		return errors.New("no proxy with uid " + proxyUID)
 	}
