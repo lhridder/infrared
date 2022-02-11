@@ -278,7 +278,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 		return err
 	}
 
-	serverAddress := hs.ParseServerAddress()
+	serverAddress := strings.ToLower(hs.ParseServerAddress())
 	if !govalidator.IsDNSName(serverAddress) && !govalidator.IsIP(serverAddress) {
 		return errors.New(serverAddress + " is not a valid domain")
 	}
