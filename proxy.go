@@ -251,7 +251,7 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 
 			err = rconn.WritePacket(handshaking.ServerBoundHandshake{
 				ProtocolVersion: 754,
-				ServerAddress:   "infrared",
+				ServerAddress:   protocol.String(proxy.DomainName()),
 				ServerPort:      protocol.UnsignedShort(port),
 				NextState:       1,
 			}.Marshal())
