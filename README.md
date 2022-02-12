@@ -9,8 +9,9 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 ## Added/changed Features
 
 - Default placeholder for invalid domain and kick message
-- Antibot based on geoip lookups and username lookups
-- Added handshakes and blocked connections to prometheus exporter
+- Antibot based on geoip lookups, encryption checks and username lookups
+- Caching in redis server
+- Added handshakes and blocked connections(multiple types) to prometheus exporter
 - Allow multiple domains in 1 configfile
 - Global .json config
 
@@ -20,13 +21,9 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 
 `-receive-proxy-protocol` if Infrared should be able to receive proxy protocol [default: `false`]
 
-`-enable-prometheus` enables the Prometheus stats exporter [default: `false`]
-
-`-prometheus-bind` specifies what the Prometheus HTTP server should bind to [default: `:9100`]
-
 ### Example Usage
 
-`./infrared -config-path="." -receive-proxy-protocol=true -enable-prometheus -prometheus-bind="localhost:9123"`
+`./infrared -config-path="." -receive-proxy-protocol=true`
 
 ## Proxy Config
 
@@ -139,8 +136,8 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 </details>
 
 ## Prometheus exporter
-The built-in prometheus exporter can be used to view metrics about infrareds operation.  
-When the command line flag `-enable-prometheus` is enabled it will bind to `:9100` by default, if you would like to use another port or use an application like [node_exporter](https://github.com/prometheus/node_exporter) that also uses port 9100 on the same machine you can change the port with the `-prometheus-bind` command line flag, example: `-prometheus-bind=":9070"`.  
+The built-in prometheus exporter can be used to view metrics about infrareds operation.
+This can be used through `"prometheusEnabled": true` and `"prometheusBind": ":9070"` in `config.yml`
 It is recommended to firewall the prometheus exporter with an application like *ufw* or *iptables* to make it only accessible by your own Prometheus instance.
 ### Prometheus configuration:
 Example prometheus.yml configuration:
@@ -158,8 +155,17 @@ scrape_configs:
   * **instance:** what infrared instance the amount of players are connected to.
   * **job:** what job was specified in the prometheus configuration.
 * infrared_handshakes: counter of the number of handshake packets received per instande, type and target:
-  * **Example response:** `infrared_handshakes{instance="vps1.example.com:9070",type="status",host="proxy.example.com"} 5`
+  * **Example response:** `infrared_handshakes{instance="vps1.example.com:9070",type="status",host="proxy.example.com",country="DE"} 5`
   * **instance:** what infrared instance handshakes were received on.
-  * **type:** the type of handshake received; "status", "login", "cancelled_host" and "cancelled_name".
+  * **type:** the type of handshake received; "status", "login", "cancelled_host", "cancelled_encryption" and "cancelled_name".
   * **country:** country where the player ip is from.
   * **host:** the target host specified by the "Server Address" field in the handshake packet. [[1]](https://wiki.vg/Protocol#Handshaking)
+
+## Used sources
+- [Minecraft protocol documentation](https://wiki.vg/Protocol)
+- [Minecraft protocol implementation in golang 1](https://github.com/specspace/plasma)
+- [Minecraft protocol implementation in golang 2](https://github.com/Tnze/go-mc)
+- [Mojang api implementation in golang](github.com/Lukaesebrot/mojango)
+- [Redis library for golang](github.com/go-redis/redis/v8)
+- [MMDB geoip library for golang](github.com/oschwald/geoip2-golang)
+- [Govalidator](github.com/asaskevich/govalidator)
