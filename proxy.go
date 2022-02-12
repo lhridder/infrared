@@ -7,11 +7,13 @@ import (
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
+	"github.com/haveachin/infrared/protocol/status"
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +36,9 @@ type Proxy struct {
 	cancelTimeoutFunc func()
 	players           map[Conn]string
 	mu                sync.Mutex
+
+	cacheTime     time.Time
+	cacheResponse protocol.Packet
 }
 
 func (proxy *Proxy) Process() process.Process {
@@ -207,6 +212,98 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 	proxyDomain := proxy.DomainName()
 	proxyTo := proxy.ProxyTo()
 	proxyUID := proxy.UID()
+
+	if hs.IsStatusRequest() {
+		if proxy.cacheTime.IsZero() || time.Now().Sub(proxy.cacheTime) > 30*time.Second {
+			log.Printf("[i] Updating cache for %s", proxyUID)
+			dialer, err := proxy.Dialer()
+			if err != nil {
+				return err
+			}
+
+			rconn, err := dialer.Dial(proxyTo)
+			if err != nil {
+				log.Printf("[i] %s did not respond to ping; is the target offline?", proxyTo)
+				return proxy.handleStatusRequest(conn, false)
+			}
+
+			if proxy.ProxyProtocol() {
+				header := &proxyproto.Header{
+					Version:           2,
+					Command:           proxyproto.PROXY,
+					TransportProtocol: proxyproto.TCPv4,
+					SourceAddr:        connRemoteAddr,
+					DestinationAddr:   rconn.RemoteAddr(),
+				}
+
+				if _, err = header.WriteTo(rconn); err != nil {
+					return err
+				}
+			}
+
+			_, portString, _ := net.SplitHostPort(proxyTo)
+			port, err := strconv.ParseInt(portString, 10, 16)
+
+			err = rconn.WritePacket(handshaking.ServerBoundHandshake{
+				ProtocolVersion: 754,
+				ServerAddress:   "infrared",
+				ServerPort:      protocol.UnsignedShort(port),
+				NextState:       1,
+			}.Marshal())
+			if err != nil {
+				return err
+			}
+
+			err = rconn.WritePacket(status.ServerBoundRequest{}.Marshal())
+			if err != nil {
+				return err
+			}
+
+			clientboundResponse, err := rconn.ReadPacket()
+			if err != nil {
+				return err
+			}
+			_, err = status.UnmarshalClientBoundResponse(clientboundResponse)
+			if err != nil {
+				return err
+			}
+
+			proxy.cacheTime = time.Now()
+			proxy.cacheResponse = clientboundResponse
+
+			rconn.Close()
+		} else {
+			_, err := conn.ReadPacket()
+			if err != nil {
+				return err
+			}
+
+			err = conn.WritePacket(proxy.cacheResponse)
+			if err != nil {
+				return err
+			}
+
+			pingPacket, err := conn.ReadPacket()
+			if err != nil {
+				return err
+			}
+
+			ping, err := status.UnmarshalServerBoundPing(pingPacket)
+			if err != nil {
+				return err
+			}
+
+			err = conn.WritePacket(status.ClientBoundPong{
+				Payload: ping.Payload,
+			}.Marshal())
+			if err != nil {
+				return err
+			}
+
+			log.Printf("[i] Sent %s cached response for %s", connRemoteAddr, proxyUID)
+			return nil
+		}
+	}
 
 	dialer, err := proxy.Dialer()
 	if err != nil {
