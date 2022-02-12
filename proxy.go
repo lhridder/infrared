@@ -227,6 +227,11 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 				return proxy.handleStatusRequest(conn, false)
 			}
 
+			if proxy.RealIP() {
+				hs.UpgradeToRealIP(connRemoteAddr, time.Now())
+				handshakePacket = hs.Marshal()
+			}
+
 			if proxy.ProxyProtocol() {
 				header := &proxyproto.Header{
 					Version:           2,
