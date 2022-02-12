@@ -46,6 +46,8 @@ type ProxyConfig struct {
 type GlobalConfig struct {
 	PrometheusEnabled      bool     `json:"prometheusEnabled"`
 	PrometheusBind         string   `json:"prometheusBind"`
+	ApiEnabled             bool     `json:"apiEnabled"`
+	ApiBind                string   `json:"apiBind"`
 	GenericPingVersion     string   `json:"genericPingVersion"`
 	GenericPingDescription string   `json:"genericPingDescription"`
 	GeoIPenabled           bool     `json:"geoIPenabled"`
@@ -60,6 +62,8 @@ type GlobalConfig struct {
 var (
 	PrometheusEnabled      = false
 	PrometheusBind         = ":9100"
+	ApiEnabled             = false
+	ApiBind                = ":5000"
 	GenericPingVersion     = "Infrared"
 	GenericPingDescription = "There is no proxy associated with this domain. Please check your configuration."
 	GeoIPenabled           = false
@@ -451,6 +455,8 @@ func LoadGlobalConfig() {
 		panic(err)
 	}
 	_ = jsonFile.Close()
+	ApiEnabled = config.ApiEnabled
+	ApiBind = config.ApiBind
 	PrometheusEnabled = config.PrometheusEnabled
 	PrometheusBind = config.PrometheusBind
 	GenericPingVersion = config.GenericPingVersion

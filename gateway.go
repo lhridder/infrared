@@ -41,7 +41,7 @@ var (
 
 type Gateway struct {
 	listeners            sync.Map
-	proxies              sync.Map
+	Proxies              sync.Map
 	closed               chan bool
 	wg                   sync.WaitGroup
 	receiveProxyProtocol bool
@@ -134,7 +134,7 @@ func (gateway *Gateway) Close() {
 
 func (gateway *Gateway) CloseProxy(proxyUID string) {
 	log.Println("Closing proxy with UID", proxyUID)
-	v, ok := gateway.proxies.Load(proxyUID)
+	v, ok := gateway.Proxies.Load(proxyUID)
 	if !ok {
 		return
 	}
@@ -143,11 +143,13 @@ func (gateway *Gateway) CloseProxy(proxyUID string) {
 	uids := proxy.UIDs()
 	for _, uid := range uids {
 		log.Println("Closing proxy with UID", uid)
-		gateway.proxies.Delete(uid)
+		gateway.Proxies.Delete(uid)
 	}
 
+	playersConnected.DeleteLabelValues(proxy.DomainName())
+
 	closeListener := true
-	gateway.proxies.Range(func(k, v interface{}) bool {
+	gateway.Proxies.Range(func(k, v interface{}) bool {
 		otherProxy := v.(*Proxy)
 		if proxy.ListenTo() == otherProxy.ListenTo() {
 			closeListener = false
@@ -159,8 +161,6 @@ func (gateway *Gateway) CloseProxy(proxyUID string) {
 	if !closeListener {
 		return
 	}
-
-	playersConnected.Delete(prometheus.Labels{"host": proxy.DomainName()})
 
 	v, ok = gateway.listeners.Load(proxy.ListenTo())
 	if !ok {
@@ -174,7 +174,7 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 	uids := proxy.UIDs()
 	for _, uid := range uids {
 		log.Println("Registering proxy with UID", uid)
-		gateway.proxies.Store(uid, proxy)
+		gateway.Proxies.Store(uid, proxy)
 	}
 	proxyUID := proxy.UID()
 
@@ -286,7 +286,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	proxyUID := proxyUID(serverAddress, addr)
 	log.Printf("[i] %s requests proxy with UID %s", connRemoteAddr, proxyUID)
 
-	v, ok := gateway.proxies.Load(proxyUID)
+	v, ok := gateway.Proxies.Load(proxyUID)
 	if !ok {
 		if gateway.underAttack {
 			_ = conn.Close()

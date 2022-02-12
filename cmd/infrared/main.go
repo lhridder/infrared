@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/haveachin/infrared"
+	"github.com/haveachin/infrared/api"
 	"log"
 	"os"
 	"strconv"
@@ -104,6 +105,10 @@ func main() {
 			}
 		}
 	}()
+
+	if infrared.ApiEnabled {
+		go api.ListenAndServe(configPath, infrared.ApiBind)
+	}
 
 	if infrared.GeoIPenabled {
 		log.Println("Loading GeoIPDB")

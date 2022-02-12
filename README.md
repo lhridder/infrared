@@ -161,6 +161,35 @@ scrape_configs:
   * **country:** country where the player ip is from.
   * **host:** the target host specified by the "Server Address" field in the handshake packet. [[1]](https://wiki.vg/Protocol#Handshaking)
 
+## API
+### Route examples
+GET `/proxies` will return
+```json
+[
+"config.json",
+"config2.json"
+]
+```
+
+GET `/proxies/{fileName}` will return
+```json
+{
+"domainNames": ["play.example.org"],
+"proxyTo": "backend.example.org:25566"
+}
+```
+
+POST `/proxies/{fileName}` with body
+```json
+{
+"domainNames": ["play.example.org"],
+"proxyTo": "backend.example.org:25566"
+}
+```
+will return 200(OK)
+
+DELETE `/proxies/{fileName}` will return 200(OK)
+
 ## Used sources
 - [Minecraft protocol documentation](https://wiki.vg/Protocol)
 - [Minecraft protocol implementation in golang 1](https://github.com/specspace/plasma)
@@ -169,3 +198,4 @@ scrape_configs:
 - [Redis library for golang](github.com/go-redis/redis/v8)
 - [MMDB geoip library for golang](github.com/oschwald/geoip2-golang)
 - [Govalidator](github.com/asaskevich/govalidator)
+- [Mux router](github.com/gorilla/mux)
