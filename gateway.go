@@ -404,35 +404,40 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			}
 			if MojangAPIenabled {
 				if gateway.underAttack {
-					verifyToken := make([]byte, 4)
-					if _, err := rand.Read(verifyToken); err != nil {
-						return err
-					}
+					result, err := gateway.rdb.Get(ctx, "ip:"+ip).Result()
+					results := strings.Split(result, ",")
+					status, _ := strconv.ParseBool(results[0])
+					if status != true {
+						verifyToken := make([]byte, 4)
+						if _, err := rand.Read(verifyToken); err != nil {
+							return err
+						}
 
-					err = conn.WritePacket(login.ClientBoundEncryptionRequest{
-						ServerID:    "",
-						PublicKey:   gateway.publicKey,
-						VerifyToken: verifyToken,
-					}.Marshal())
-					if err != nil {
-						return err
-					}
+						err = conn.WritePacket(login.ClientBoundEncryptionRequest{
+							ServerID:    "",
+							PublicKey:   gateway.publicKey,
+							VerifyToken: verifyToken,
+						}.Marshal())
+						if err != nil {
+							return err
+						}
 
-					encryptionResponse, err := conn.ReadPacket()
-					_, err = login.UnmarshalServerBoundEncryptionResponse(encryptionResponse)
-					if err != nil {
-						handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": serverAddress, "country": country}).Inc()
-						err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
-						return errors.New("invalid login response")
-					}
+						encryptionResponse, err := conn.ReadPacket()
+						_, err = login.UnmarshalServerBoundEncryptionResponse(encryptionResponse)
+						if err != nil {
+							handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": serverAddress, "country": country}).Inc()
+							err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
+							return errors.New("invalid login response")
+						}
 
-					err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
-					if err != nil {
-						log.Println(err)
-					}
+						err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						if err != nil {
+							log.Println(err)
+						}
 
-					handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": serverAddress, "country": country}).Inc()
-					return errors.New("blocked")
+						handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": serverAddress, "country": country}).Inc()
+						return errors.New("blocked")
+					}
 				}
 
 				ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
