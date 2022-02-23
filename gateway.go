@@ -176,21 +176,6 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 		log.Println("Registering proxy with UID", uid)
 		gateway.Proxies.Store(uid, proxy)
 	}
-	proxyUID := proxy.UID()
-
-	proxy.Config.removeCallback = func() {
-		gateway.CloseProxy(proxyUID)
-	}
-
-	proxy.Config.changeCallback = func() {
-		if proxyUID == proxy.UID() {
-			return
-		}
-		gateway.CloseProxy(proxyUID)
-		if err := gateway.RegisterProxy(proxy); err != nil {
-			log.Println(err)
-		}
-	}
 
 	playersConnected.WithLabelValues(proxy.DomainName())
 

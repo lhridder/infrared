@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/haveachin/infrared/process"
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/status"
 )
@@ -24,23 +23,18 @@ type ProxyConfig struct {
 	sync.RWMutex
 	watcher *fsnotify.Watcher
 
-	removeCallback func()
-	changeCallback func()
-	dialer         *Dialer
-	process        process.Process
+	dialer *Dialer
 
-	DomainNames       []string             `json:"domainNames"`
-	ListenTo          string               `json:"listenTo"`
-	ProxyTo           string               `json:"proxyTo"`
-	ProxyBind         string               `json:"proxyBind"`
-	ProxyProtocol     bool                 `json:"proxyProtocol"`
-	RealIP            bool                 `json:"realIp"`
-	Timeout           int                  `json:"timeout"`
-	DisconnectMessage string               `json:"disconnectMessage"`
-	Docker            DockerConfig         `json:"docker"`
-	OnlineStatus      StatusConfig         `json:"onlineStatus"`
-	OfflineStatus     StatusConfig         `json:"offlineStatus"`
-	CallbackServer    CallbackServerConfig `json:"callbackServer"`
+	DomainNames       []string     `json:"domainNames"`
+	ListenTo          string       `json:"listenTo"`
+	ProxyTo           string       `json:"proxyTo"`
+	ProxyBind         string       `json:"proxyBind"`
+	ProxyProtocol     bool         `json:"proxyProtocol"`
+	RealIP            bool         `json:"realIp"`
+	Timeout           int          `json:"timeout"`
+	DisconnectMessage string       `json:"disconnectMessage"`
+	OnlineStatus      StatusConfig `json:"onlineStatus"`
+	OfflineStatus     StatusConfig `json:"offlineStatus"`
 }
 
 type GlobalConfig struct {
@@ -89,28 +83,6 @@ func (cfg *ProxyConfig) Dialer() (*Dialer, error) {
 		},
 	}
 	return cfg.dialer, nil
-}
-
-type DockerConfig struct {
-	DNSServer     string `json:"dnsServer"`
-	ContainerName string `json:"containerName"`
-	Timeout       int    `json:"timeout"`
-	Portainer     struct {
-		Address    string `json:"address"`
-		EndpointID string `json:"endpointId"`
-		Username   string `json:"username"`
-		Password   string `json:"password"`
-	} `json:"portainer"`
-}
-
-func (docker DockerConfig) IsDocker() bool {
-	return docker.ContainerName != ""
-}
-
-func (docker DockerConfig) IsPortainer() bool {
-	return docker.ContainerName != "" &&
-		docker.Portainer.Address != "" &&
-		docker.Portainer.EndpointID != ""
 }
 
 type PlayerSample struct {
@@ -205,21 +177,12 @@ func loadImageAndEncodeToBase64String(path string) (string, error) {
 	return base64.StdEncoding.EncodeToString(buffer), nil
 }
 
-type CallbackServerConfig struct {
-	URL    string   `json:"url"`
-	Events []string `json:"events"`
-}
-
 func DefaultProxyConfig() ProxyConfig {
 	return ProxyConfig{
 		DomainNames:       []string{"localhost"},
 		ListenTo:          ":25565",
 		Timeout:           1000,
 		DisconnectMessage: "Sorry {{username}}, but the server is offline.",
-		Docker: DockerConfig{
-			DNSServer: "127.0.0.11",
-			Timeout:   300000,
-		},
 		OfflineStatus: StatusConfig{
 			VersionName:    GenericPingVersion,
 			ProtocolNumber: 757,
@@ -342,7 +305,6 @@ func (cfg *ProxyConfig) watch(path string, interval time.Duration) {
 				return
 			}
 			if event.Op&fsnotify.Remove == fsnotify.Remove {
-				cfg.removeCallback()
 				return
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
@@ -366,8 +328,6 @@ func (cfg *ProxyConfig) onConfigWrite(event fsnotify.Event) {
 	cfg.OnlineStatus.cachedPacket = nil
 	cfg.OfflineStatus.cachedPacket = nil
 	cfg.dialer = nil
-	cfg.process = nil
-	cfg.changeCallback()
 }
 
 // LoadFromPath loads the ProxyConfig from a file

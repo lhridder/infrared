@@ -2,8 +2,6 @@ package infrared
 
 import (
 	"fmt"
-	"github.com/haveachin/infrared/callback"
-	"github.com/haveachin/infrared/process"
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
@@ -39,42 +37,6 @@ type Proxy struct {
 
 	cacheTime     time.Time
 	cacheResponse protocol.Packet
-}
-
-func (proxy *Proxy) Process() process.Process {
-	proxy.Config.RLock()
-	defer proxy.Config.RUnlock()
-	if proxy.Config.process != nil {
-		return proxy.Config.process
-	}
-
-	if proxy.Config.Docker.IsPortainer() {
-		portainer, err := process.NewPortainer(
-			proxy.Config.Docker.ContainerName,
-			proxy.Config.Docker.Portainer.Address,
-			proxy.Config.Docker.Portainer.EndpointID,
-			proxy.Config.Docker.Portainer.Username,
-			proxy.Config.Docker.Portainer.Password,
-		)
-		if err != nil {
-			log.Println("Failed to create a Portainer process; error:", err)
-			return nil
-		}
-		proxy.Config.process = portainer
-		return portainer
-	}
-
-	if proxy.Config.Docker.IsDocker() {
-		docker, err := process.NewDocker(proxy.Config.Docker.ContainerName)
-		if err != nil {
-			log.Println("Failed to create a Docker process; error:", err)
-			return nil
-		}
-		proxy.Config.process = docker
-		return docker
-	}
-
-	return nil
 }
 
 func (proxy *Proxy) DomainNames() []string {
@@ -137,12 +99,6 @@ func (proxy *Proxy) Timeout() time.Duration {
 	return time.Millisecond * time.Duration(proxy.Config.Timeout)
 }
 
-func (proxy *Proxy) DockerTimeout() time.Duration {
-	proxy.Config.RLock()
-	defer proxy.Config.RUnlock()
-	return time.Millisecond * time.Duration(proxy.Config.Docker.Timeout)
-}
-
 func (proxy *Proxy) ProxyProtocol() bool {
 	proxy.Config.RLock()
 	defer proxy.Config.RUnlock()
@@ -153,15 +109,6 @@ func (proxy *Proxy) RealIP() bool {
 	proxy.Config.RLock()
 	defer proxy.Config.RUnlock()
 	return proxy.Config.RealIP
-}
-
-func (proxy *Proxy) CallbackLogger() callback.Logger {
-	proxy.Config.RLock()
-	defer proxy.Config.RUnlock()
-	return callback.Logger{
-		URL:    proxy.Config.CallbackServer.URL,
-		Events: proxy.Config.CallbackServer.Events,
-	}
 }
 
 func (proxy *Proxy) UID() string {
@@ -195,12 +142,6 @@ func (proxy *Proxy) removePlayer(conn Conn) int {
 	}
 	delete(proxy.players, conn)
 	return len(proxy.players)
-}
-
-func (proxy *Proxy) logEvent(event callback.Event) {
-	if _, err := proxy.CallbackLogger().LogEvent(event); err != nil {
-		log.Println("[w] Failed callback logging; error:", err)
-	}
 }
 
 func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePacket protocol.Packet, loginPacket protocol.Packet) error {
@@ -277,37 +218,36 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 			proxy.cacheResponse = clientboundResponse
 
 			rconn.Close()
-		} else {
-			_, err := conn.ReadPacket()
-			if err != nil {
-				return err
-			}
-
-			err = conn.WritePacket(proxy.cacheResponse)
-			if err != nil {
-				return err
-			}
-
-			pingPacket, err := conn.ReadPacket()
-			if err != nil {
-				return err
-			}
-
-			ping, err := status.UnmarshalServerBoundPing(pingPacket)
-			if err != nil {
-				return err
-			}
-
-			err = conn.WritePacket(status.ClientBoundPong{
-				Payload: ping.Payload,
-			}.Marshal())
-			if err != nil {
-				return err
-			}
-
-			log.Printf("[i] Sent %s cached response for %s", connRemoteAddr, proxyUID)
-			return nil
 		}
+		_, err := conn.ReadPacket()
+		if err != nil {
+			return err
+		}
+
+		err = conn.WritePacket(proxy.cacheResponse)
+		if err != nil {
+			return err
+		}
+
+		pingPacket, err := conn.ReadPacket()
+		if err != nil {
+			return err
+		}
+
+		ping, err := status.UnmarshalServerBoundPing(pingPacket)
+		if err != nil {
+			return err
+		}
+
+		err = conn.WritePacket(status.ClientBoundPong{
+			Payload: ping.Payload,
+		}.Marshal())
+		if err != nil {
+			return err
+		}
+
+		log.Printf("[i] Sent %s cached response for %s", connRemoteAddr, proxyUID)
+		return nil
 	}
 
 	dialer, err := proxy.Dialer()
@@ -318,20 +258,9 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 	rconn, err := dialer.Dial(proxyTo)
 	if err != nil {
 		log.Printf("[i] %s did not respond to ping; is the target offline?", proxyTo)
-		if hs.IsStatusRequest() {
-			return proxy.handleStatusRequest(conn, false)
-		}
-		if err := proxy.startProcessIfNotRunning(); err != nil {
-			return err
-		}
-		proxy.timeoutProcess()
 		return proxy.handleLoginRequest(conn)
 	}
 	defer rconn.Close()
-
-	if hs.IsStatusRequest() && proxy.IsOnlineStatusConfigured() {
-		return proxy.handleStatusRequest(conn, true)
-	}
 
 	if proxy.ProxyProtocol() {
 		header := &proxyproto.Header{
@@ -356,43 +285,22 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 		return err
 	}
 
-	if hs.IsLoginRequest() {
-		proxy.cancelProcessTimeout()
-		ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
-		if err != nil {
-			return err
-		}
-		username := string(ls.Name)
-		err = rconn.WritePacket(loginPacket)
-		if err != nil {
-			return err
-		}
-		log.Printf("[i] %s with username %s connects through %s", connRemoteAddr, username, proxy.UID())
-		proxy.addPlayer(conn, username)
-		proxy.logEvent(callback.PlayerJoinEvent{
-			Username:      username,
-			RemoteAddress: connRemoteAddr.String(),
-			TargetAddress: proxyTo,
-			ProxyUID:      proxyUID,
-		})
-		playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
-
-		defer proxy.logEvent(callback.PlayerLeaveEvent{
-			Username:      username,
-			RemoteAddress: connRemoteAddr.String(),
-			TargetAddress: proxyTo,
-			ProxyUID:      proxyUID,
-		})
-		defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
+	ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
+	if err != nil {
+		return err
 	}
+	username := string(ls.Name)
+	err = rconn.WritePacket(loginPacket)
+	if err != nil {
+		return err
+	}
+	log.Printf("[i] %s with username %s connects through %s", connRemoteAddr, username, proxy.UID())
+	proxy.addPlayer(conn, username)
+	playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
+	defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
 
 	go pipe(rconn, conn)
 	pipe(conn, rconn)
-
-	remainingPlayers := proxy.removePlayer(conn)
-	if remainingPlayers <= 0 {
-		proxy.timeoutProcess()
-	}
 	return nil
 }
 
@@ -412,61 +320,6 @@ func pipe(src, dst Conn) {
 			return
 		}
 	}
-}
-
-func (proxy *Proxy) startProcessIfNotRunning() error {
-	if proxy.Process() == nil {
-		return nil
-	}
-
-	running, err := proxy.Process().IsRunning()
-	if err != nil {
-		return err
-	}
-
-	if running {
-		return nil
-	}
-
-	log.Println("[i] Starting container for", proxy.UID())
-	proxy.logEvent(callback.ContainerStartEvent{ProxyUID: proxy.UID()})
-	return proxy.Process().Start()
-}
-
-func (proxy *Proxy) timeoutProcess() {
-	if proxy.Process() == nil {
-		return
-	}
-
-	if proxy.DockerTimeout() <= 0 {
-		return
-	}
-
-	proxy.cancelProcessTimeout()
-
-	log.Printf("[i] Starting container timeout %s on %s", proxy.DockerTimeout(), proxy.UID())
-	timer := time.AfterFunc(proxy.DockerTimeout(), func() {
-		log.Println("[i] Stopping container on", proxy.UID())
-		proxy.logEvent(callback.ContainerStopEvent{ProxyUID: proxy.UID()})
-		if err := proxy.Process().Stop(); err != nil {
-			log.Printf("[w] Failed to stop the container for %s; error: %s", proxy.UID(), err)
-		}
-	})
-
-	proxy.cancelTimeoutFunc = func() {
-		if timer.Stop() {
-			log.Println("[i] Timout stopped for", proxy.UID())
-		}
-	}
-}
-
-func (proxy *Proxy) cancelProcessTimeout() {
-	if proxy.cancelTimeoutFunc == nil {
-		return
-	}
-
-	proxy.cancelTimeoutFunc()
-	proxy.cancelTimeoutFunc = nil
 }
 
 func (proxy *Proxy) handleLoginRequest(conn Conn) error {
