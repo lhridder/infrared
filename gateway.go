@@ -220,6 +220,9 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 			log.Printf("[>] Incoming %s on listener %s", conn.RemoteAddr(), addr)
 			defer conn.Close()
 			if err := gateway.serve(conn, addr); err != nil {
+				if errors.Is(err, protocol.ErrInvalidPacketID) {
+					handshakeCount.With(prometheus.Labels{"type": "cancelled_invalid", "host": "", "country": ""}).Inc()
+				}
 				log.Printf("[x] %s closed connection with %s; error: %s", conn.RemoteAddr(), addr, err)
 				return
 			}
