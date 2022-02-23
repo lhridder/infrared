@@ -250,7 +250,7 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 			port, err := strconv.ParseInt(portString, 10, 16)
 
 			err = rconn.WritePacket(handshaking.ServerBoundHandshake{
-				ProtocolVersion: 754,
+				ProtocolVersion: hs.ProtocolVersion,
 				ServerAddress:   protocol.String(proxy.DomainName()),
 				ServerPort:      protocol.UnsignedShort(port),
 				NextState:       1,
