@@ -192,7 +192,7 @@ scrape_configs:
 * infrared_handshakes: counter of the number of handshake packets received per instande, type and target:
   * **Example response:** `infrared_handshakes{instance="vps1.example.com:9070",type="status",host="proxy.example.com",country="DE"} 5`
   * **instance:** what infrared instance handshakes were received on.
-  * **type:** the type of handshake received; "status", "login", "cancelled_host", "cancelled_encryption" and "cancelled_name".
+  * **type:** the type of handshake received; "status", "login", "cancelled_host", "cancelled_encryption", "cancelled_name", "cancelled_rejoin" and "cancelled_invalid".
   * **country:** country where the player ip is from.
   * **host:** the target host specified by the "Server Address" field in the handshake packet. [[1]](https://wiki.vg/Protocol#Handshaking)
 
