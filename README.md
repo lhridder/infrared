@@ -8,12 +8,13 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 
 ## Added/changed Features
 
-- Default placeholder for invalid domain and kick message
-- Antibot based on geoip lookups, encryption checks and username lookups
+- Default configurable placeholder for invalid domain and kick message
+- Antibot based on geoip lookups, encryption checks, protocol checks and username lookups
 - Caching in redis server
 - Added handshakes and blocked connections(multiple types) to prometheus exporter
 - Allow multiple domains in 1 configfile
 - Global .json config
+- Removed docker and callback features
 
 ## Command-Line Flags
 
@@ -71,11 +72,9 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 | disconnectMessage | String    | false    | Sorry {{username}}, but the server is offline. | The message a client sees when he gets disconnected from Infrared due to the server on `proxyTo` won't respond. Currently available placeholders:<br>- `username` the username of player that tries to connect<br>- `now` the current server time<br>- `remoteAddress` the address of the client that tries to connect<br>- `localAddress` the local address of the server<br>- `domain` the domain of the proxy (same as `domainName`)<br>- `proxyTo` the address that the proxy proxies to (same as `proxyTo`)<br>- `listenTo` the address that Infrared listens on (same as `listenTo`) |
 | timeout           | Integer   | true     | 1000                                           | The time in milliseconds for the proxy to wait for a ping response before the host (the address you proxyTo) will be declared as offline. This "online check" will be resend for every new connection.                                                                                                                                                                                                                                                                                                                                                                                     |
 | proxyProtocol     | Boolean   | false    | false                                          | If Infrared should use HAProxy's Proxy Protocol for IP **forwarding**.<br>Warning: You should only ever set this to true if you now that the server you `proxyTo` is compatible.                                                                                                                                                                                                                                                                                                                                                                                                           |
-| realIp            | Boolean   | false    | false                                          | If Infrared should use TCPShield/RealIP Protocol for IP **forwarding**.<br>Warning: You should only ever set this to true if you now that the server you `proxyTo` is compatible.                                                                                                                                                                                                                                                                                                                                                                                                          |
-| docker            | Object    | false    | See [Docker](#Docker)                          | Optional Docker configuration to automatically start a container and stop it again if unused.  <br>Note: Infrared will not take direct connections into account. Be sure to route all traffic that connects to the container through Infrared.                                                                                                                                                                                                                                                                                                                                             |
+| realIp            | Boolean   | false    | false                                          | If Infrared should use TCPShield/RealIP Protocol for IP **forwarding**.<br>Warning: You should only ever set this to true if you now that the server you `proxyTo` is compatible.                                                                                                                                                                                                                                                                                                                                                                                                          |                                                                                                                                                                                                                                                                                                                                      |
 | onlineStatus      | Object    | false    |                                                | This is the response that Infrared will give when a client asks for the server status and the server is online.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | offlineStatus     | Object    | false    | See [Response Status](#response-status)        | This is the response that Infrared will give when a client asks for the server status and the server is offline.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| callbackServer    | Object    | false    | See [Callback Server](#callback-server)        | Optional callback server configuration to send events as a POST request to a specified URL.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ### Response Status
 
@@ -120,17 +119,6 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
   "realIp": false,
   "timeout": 1000,
   "disconnectMessage": "Username: {{username}}\nNow: {{now}}\nRemoteAddress: {{remoteAddress}}\nLocalAddress: {{localAddress}}\nDomain: {{domain}}\nProxyTo: {{proxyTo}}\nListenTo: {{listenTo}}",
-  "docker": {
-    "dnsServer": "127.0.0.11",
-    "containerName": "mc",
-    "timeout": 30000,
-    "portainer": {
-      "address": "localhost:9000",
-      "endpointId": "1",
-      "username": "admin",
-      "password": "foobar"
-    }
-  },
   "onlineStatus": {
     "versionName": "1.18",
     "protocolNumber": 757,
@@ -154,16 +142,6 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
     "maxPlayers": 20,
     "playersOnline": 0,
     "motd": "Server is currently offline"
-  },
-  "callbackServer": {
-    "url": "https://mc.example.com/callback",
-    "events": [
-      "Error",
-      "PlayerJoin",
-      "PlayerLeave",
-      "ContainerStart",
-      "ContainerStop"
-    ]
   }
 }
 ```
@@ -229,8 +207,8 @@ DELETE `/proxies/{fileName}` will return 200(OK)
 - [Minecraft protocol documentation](https://wiki.vg/Protocol)
 - [Minecraft protocol implementation in golang 1](https://github.com/specspace/plasma)
 - [Minecraft protocol implementation in golang 2](https://github.com/Tnze/go-mc)
-- [Mojang api implementation in golang](github.com/Lukaesebrot/mojango)
-- [Redis library for golang](github.com/go-redis/redis/v8)
-- [MMDB geoip library for golang](github.com/oschwald/geoip2-golang)
-- [Govalidator](github.com/asaskevich/govalidator)
-- [Mux router](github.com/gorilla/mux)
+- [Mojang api implementation in golang](https://github.com/Lukaesebrot/mojango)
+- [Redis library for golang](https://github.com/go-redis/redis/v8)
+- [MMDB geoip library for golang](https://github.com/oschwald/geoip2-golang)
+- [Govalidator](https://github.com/asaskevich/govalidator)
+- [Mux router](https://github.com/gorilla/mux)
