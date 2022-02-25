@@ -20,21 +20,3 @@ func (pk ClientBoundEncryptionRequest) Marshal() protocol.Packet {
 		pk.VerifyToken,
 	)
 }
-
-func UnmarshalClientBoundEncryptionRequest(packet protocol.Packet) (ClientBoundEncryptionRequest, error) {
-	var pk ClientBoundEncryptionRequest
-
-	if packet.ID != ClientBoundEncryptionRequestPacketID {
-		return pk, protocol.ErrInvalidPacketID
-	}
-
-	if err := packet.Scan(
-		&pk.ServerID,
-		&pk.PublicKey,
-		&pk.VerifyToken,
-	); err != nil {
-		return pk, err
-	}
-
-	return pk, nil
-}

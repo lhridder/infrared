@@ -7,15 +7,18 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Lukaesebrot/mojango"
 	"github.com/asaskevich/govalidator"
 	"github.com/go-redis/redis/v8"
+	"github.com/gofrs/uuid"
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/cfb8"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
+	"github.com/haveachin/infrared/protocol/play"
 	"github.com/oschwald/geoip2-golang"
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
@@ -462,14 +465,56 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 
 						conn.SetCipher(cfb8.NewEncrypter(block, decryptedSharedSecret), cfb8.NewDecrypter(block, decryptedSharedSecret))
 
-						err = conn.WritePacket(login.ClientBoundDisconnect{
+						notchHash := NewSha1Hash()
+						notchHash.Update([]byte(""))
+						notchHash.Update(decryptedSharedSecret)
+						notchHash.Update(gateway.publicKey)
+						hash := notchHash.HexDigest()
+
+						url := "https://sessionserver.mojang.com/session/minecraft/hasJoined?username=" + string(ls.Name) + "&serverId=" + hash
+
+						resp, err := http.Get(url)
+						if err != nil {
+							return errors.New("failed to validate player with session server")
+						}
+
+						if resp.StatusCode != http.StatusOK {
+							handshakeCount.With(prometheus.Labels{"type": "cancelled_authentication", "host": serverAddress, "country": country}).Inc()
+							err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
+							return errors.New("unable to authenticate session " + resp.Status)
+						}
+
+						var p struct {
+							ID   string `json:"id"`
+							Name string `json:"name"`
+						}
+
+						if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+							return errors.New("failed to parse session server response")
+						}
+						_ = resp.Body.Close()
+
+						playerUUID, err := uuid.FromString(p.ID)
+						if err != nil {
+							return errors.New("failed to parse player UUID")
+						}
+
+						log.Printf("%s logging in with uuid %s", p.Name, playerUUID)
+
+						err = conn.WritePacket(login.ClientBoundLoginSuccess{
+							Username: protocol.String(p.Name),
+							UUID:     protocol.UUID(playerUUID),
+						}.Marshal())
+						if err != nil {
+							return err
+						}
+
+						err = conn.WritePacket(play.ClientBoundDisconnect{
 							Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "Please rejoin to verify your connection.")),
 						}.Marshal())
 						if err != nil {
-							log.Println(err)
+							return err
 						}
-
-						//TODO check auth
 
 						err = gateway.rdb.Set(ctx, "username:"+name, "true", time.Hour*12).Err()
 						if err != nil {
