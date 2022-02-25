@@ -155,6 +155,9 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 	proxyUID := proxy.UID()
 
 	if hs.IsStatusRequest() {
+		if proxy.IsOnlineStatusConfigured() {
+			return proxy.handleStatusRequest(conn, true)
+		}
 		if proxy.cacheTime.IsZero() || time.Now().Sub(proxy.cacheTime) > 30*time.Second {
 			log.Printf("[i] Updating cache for %s", proxyUID)
 			dialer, err := proxy.Dialer()
