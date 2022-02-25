@@ -137,11 +137,13 @@ func main() {
 		}
 	}
 
-	go func() {
-		for {
-			gateway.ClearCps()
-		}
-	}()
+	if !infrared.UnderAttack {
+		go func() {
+			for {
+				gateway.ClearCps()
+			}
+		}()
+	}
 
 	log.Println("Starting Infrared")
 	if err := gateway.ListenAndServe(proxies); err != nil {

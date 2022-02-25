@@ -79,6 +79,11 @@ func (gateway *Gateway) ListenAndServe(proxies []*Proxy) error {
 		return errors.New("no proxies in gateway")
 	}
 
+	if UnderAttack {
+		log.Println("Enabled permanent underAttack mode")
+		gateway.underAttack = true
+	}
+
 	gateway.closed = make(chan bool, len(proxies))
 
 	for _, proxy := range proxies {
