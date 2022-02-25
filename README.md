@@ -9,8 +9,8 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 ## Added/changed Features
 
 - Default configurable placeholder for invalid domain and kick message
-- Antibot based on geoip lookups, encryption checks, protocol checks and username lookups
-- Caching in redis server
+- Antibot based on geoip lookups, encryption checks, authentication checks, protocol checks and username lookups
+- Caching in redis server (can be used for multiple instances)
 - Added handshakes and blocked connections(multiple types) to prometheus exporter
 - Allow multiple domains in 1 configfile
 - Global .json config
@@ -170,7 +170,7 @@ scrape_configs:
 * infrared_handshakes: counter of the number of handshake packets received per instande, type and target:
   * **Example response:** `infrared_handshakes{instance="vps1.example.com:9070",type="status",host="proxy.example.com",country="DE"} 5`
   * **instance:** what infrared instance handshakes were received on.
-  * **type:** the type of handshake received; "status", "login", "cancelled_host", "cancelled_encryption", "cancelled_name", "cancelled_rejoin" and "cancelled_invalid".
+  * **type:** the type of handshake received; "status", "login", "cancelled_host", "cancelled_encryption", "cancelled_name", "cancelled", "cancelled_authentication" and "cancelled_invalid".
   * **country:** country where the player ip is from.
   * **host:** the target host specified by the "Server Address" field in the handshake packet. [[1]](https://wiki.vg/Protocol#Handshaking)
 
