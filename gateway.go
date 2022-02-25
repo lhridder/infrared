@@ -528,48 +528,43 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 						handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": serverAddress, "country": country}).Inc()
 						return errors.New("blocked for rejoin (auth)")
 					}
-				}
-
-				//TODO retire
-				_, err = gateway.rdb.Get(ctx, "username:"+name).Result()
-				if err == redis.Nil {
-					uuid, err := gateway.api.FetchUUID(name)
-					if err != nil {
-						if err == mojango.ErrNoContent || err == mojango.ErrTooManyRequests {
-							handshakeCount.With(prometheus.Labels{"type": "cancelled_name", "host": serverAddress, "country": country}).Inc()
-
-							log.Printf("[i] Blocked %s from joining because of name %s", connRemoteAddr, name)
-							return errors.New("blocked because name")
+				} else {
+					_, err = gateway.rdb.Get(ctx, "username:"+name).Result()
+					if err == redis.Nil {
+						_, err := gateway.api.FetchUUID(name)
+						if err != nil {
+							if err == mojango.ErrNoContent || err == mojango.ErrTooManyRequests {
+								handshakeCount.With(prometheus.Labels{"type": "cancelled_name", "host": serverAddress, "country": country}).Inc()
+								return errors.New("blocked because name")
+							} else {
+								return errors.New("Could not query Mojang: " + err.Error())
+							}
 						} else {
-							return errors.New("Could not query Mojang: " + err.Error())
+							err = gateway.rdb.Set(ctx, "username:"+name, "true", time.Hour*12).Err()
+							if err != nil {
+								log.Println(err)
+							}
+							err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+							if err != nil {
+								log.Println(err)
+							}
 						}
 					} else {
-						log.Printf("[i] Looked up %s with username %s to uuid %s", connRemoteAddr, name, uuid)
-
-						err = gateway.rdb.Set(ctx, "username:"+name, "true", time.Hour*12).Err()
 						if err != nil {
-							log.Println(err)
+							if err == redis.ErrClosed {
+								err := gateway.ConnectRedis()
+								if err != nil {
+									return err
+								}
+							} else {
+								return err
+							}
 						}
+						gateway.rdb.TTL(ctx, "username:"+name).SetVal(time.Hour * 12)
 						err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
 						if err != nil {
 							log.Println(err)
 						}
-					}
-				} else {
-					if err != nil {
-						if err == redis.ErrClosed {
-							err := gateway.ConnectRedis()
-							if err != nil {
-								return err
-							}
-						} else {
-							return err
-						}
-					}
-					gateway.rdb.TTL(ctx, "username:"+name).SetVal(time.Hour * 12)
-					err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
-					if err != nil {
-						log.Println(err)
 					}
 				}
 			}
