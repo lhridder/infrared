@@ -1,7 +1,9 @@
 package infrared
 
 import (
+	"bytes"
 	"context"
+	"crypto/aes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -11,6 +13,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/go-redis/redis/v8"
 	"github.com/haveachin/infrared/protocol"
+	"github.com/haveachin/infrared/protocol/cfb8"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
 	"github.com/oschwald/geoip2-golang"
@@ -51,6 +54,7 @@ type Gateway struct {
 	api                  *mojango.Client
 	rdb                  *redis.Client
 	publicKey            []byte
+	privateKey           *rsa.PrivateKey
 }
 
 func (gateway *Gateway) LoadDB() {
@@ -112,12 +116,13 @@ func (gateway *Gateway) EnablePrometheus(bind string) error {
 }
 
 func (gateway *Gateway) GenerateKeys() error {
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	privateKey, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		return err
 	}
+	gateway.privateKey = privateKey
 
-	gateway.publicKey, err = x509.MarshalPKIXPublicKey(&key.PublicKey)
+	gateway.publicKey, err = x509.MarshalPKIXPublicKey(&gateway.privateKey.PublicKey)
 	if err != nil {
 		return err
 	}
@@ -326,6 +331,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 		if err != nil {
 			return err
 		}
+
 		if GeoIPenabled {
 			result, err := gateway.rdb.Get(ctx, "ip:"+ip).Result()
 			if err == redis.Nil {
@@ -349,22 +355,25 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 					}
 
 					if contains(CountryWhitelist, country) {
-						err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": serverAddress, "country": country}).Inc()
+
+						err = gateway.rdb.Set(ctx, "ip:"+ip, "half,"+country, time.Hour*24).Err()
 						if err != nil {
 							log.Println(err)
 						}
+						return errors.New("blocked for rejoin (geoip)")
 					} else {
+						handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
+
 						err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
 						if err != nil {
 							log.Println(err)
 						}
+						return errors.New("blocked because ip")
 					}
-
-					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
-					return errors.New("blocked")
 				} else {
 					if contains(CountryWhitelist, country) {
-						err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+						err = gateway.rdb.Set(ctx, "ip:"+ip, "half,"+country, time.Hour*24).Err()
 						if err != nil {
 							log.Println(err)
 						}
@@ -382,25 +391,28 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 					}
 				}
 				results := strings.Split(result, ",")
-				status, _ := strconv.ParseBool(results[0])
 				country = results[1]
-				if status == false && gateway.underAttack {
+				if results[0] == "false" && gateway.underAttack {
 					err := conn.Close()
 					if err != nil {
 						log.Println(err)
 					}
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
 					gateway.rdb.TTL(ctx, "ip:"+ip).SetVal(time.Hour * 12)
-					log.Printf("[i] Blocked %s from joining because they joined during an attack.", connRemoteAddr)
-					return errors.New("blocked")
+					return errors.New("blocked because ip")
 				}
 			}
 			if MojangAPIenabled {
+				ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
+				if err != nil {
+					return err
+				}
+
+				name := string(ls.Name)
 				if gateway.underAttack {
 					result, err := gateway.rdb.Get(ctx, "ip:"+ip).Result()
 					results := strings.Split(result, ",")
-					status, _ := strconv.ParseBool(results[0])
-					if status != true {
+					if results[0] != "true" {
 						verifyToken := make([]byte, 4)
 						if _, err := rand.Read(verifyToken); err != nil {
 							return err
@@ -416,36 +428,71 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 						}
 
 						encryptionResponse, err := conn.ReadPacket()
-						_, err = login.UnmarshalServerBoundEncryptionResponse(encryptionResponse)
+						encryptionRes, err := login.UnmarshalServerBoundEncryptionResponse(encryptionResponse)
 						if err != nil {
 							handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": serverAddress, "country": country}).Inc()
 							err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
 							return errors.New("invalid login response")
 						}
 
+						decryptedVerifyToken, err := gateway.privateKey.Decrypt(rand.Reader, encryptionRes.VerifyToken, nil)
+						if err != nil {
+							handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": serverAddress, "country": country}).Inc()
+							err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
+							return errors.New("failed to decrypt verify token")
+						}
+
+						if !bytes.Equal(decryptedVerifyToken, verifyToken) {
+							handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": serverAddress, "country": country}).Inc()
+							err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
+							return errors.New("invalid verify token")
+						}
+
+						decryptedSharedSecret, err := gateway.privateKey.Decrypt(rand.Reader, encryptionRes.SharedSecret, nil)
+						if err != nil {
+							handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": serverAddress, "country": country}).Inc()
+							err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
+							return errors.New("failed to decrypt shared secret")
+						}
+
+						block, err := aes.NewCipher(decryptedSharedSecret)
+						if err != nil {
+							return errors.New("failed to start cypher")
+						}
+
+						conn.SetCipher(cfb8.NewEncrypter(block, decryptedSharedSecret), cfb8.NewDecrypter(block, decryptedSharedSecret))
+
+						err = conn.WritePacket(login.ClientBoundDisconnect{
+							Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "Please rejoin to verify your connection.")),
+						}.Marshal())
+						if err != nil {
+							log.Println(err)
+						}
+
+						//TODO check auth
+
+						err = gateway.rdb.Set(ctx, "username:"+name, "true", time.Hour*12).Err()
+						if err != nil {
+							log.Println(err)
+						}
 						err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
 						if err != nil {
 							log.Println(err)
 						}
 
 						handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": serverAddress, "country": country}).Inc()
-						return errors.New("blocked")
+						return errors.New("blocked for rejoin (auth)")
 					}
 				}
 
-				ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
-				if err != nil {
-					return err
-				}
-
-				name := string(ls.Name)
-
+				//TODO retire
 				_, err = gateway.rdb.Get(ctx, "username:"+name).Result()
 				if err == redis.Nil {
 					uuid, err := gateway.api.FetchUUID(name)
 					if err != nil {
 						if err == mojango.ErrNoContent || err == mojango.ErrTooManyRequests {
 							handshakeCount.With(prometheus.Labels{"type": "cancelled_name", "host": serverAddress, "country": country}).Inc()
+
 							log.Printf("[i] Blocked %s from joining because of name %s", connRemoteAddr, name)
 							return errors.New("blocked because name")
 						} else {

@@ -20,6 +20,10 @@ type PacketPeeker interface {
 	PeekPacket() (protocol.Packet, error)
 }
 
+type PacketCipherer interface {
+	SetCipher(ecoStream, decoStream cipher.Stream)
+}
+
 type conn struct {
 	net.Conn
 
@@ -50,6 +54,7 @@ type Conn interface {
 	PacketWriter
 	PacketReader
 	PacketPeeker
+	PacketCipherer
 
 	Reader() *bufio.Reader
 }
