@@ -536,10 +536,12 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	}
 
 	if hs.IsStatusRequest() {
-		record, err := gateway.db.Country(net.ParseIP(ip))
-		country = record.Country.IsoCode
-		if err != nil {
-			log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
+		if GeoIPenabled {
+			record, err := gateway.db.Country(net.ParseIP(ip))
+			country = record.Country.IsoCode
+			if err != nil {
+				log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
+			}
 		}
 		handshakeCount.With(prometheus.Labels{"type": "status", "host": serverAddress, "country": country}).Inc()
 		if err := proxy.handleConn(conn, connRemoteAddr, handshakePacket, handshakePacket); err != nil {
