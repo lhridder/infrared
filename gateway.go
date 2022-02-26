@@ -372,7 +372,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 						if err != nil {
 							log.Println(err)
 						}
-						return errors.New("blocked because ip")
+						return errors.New("blocked because ip " + country)
 					}
 				} else {
 					if contains(CountryWhitelist, country) {
@@ -402,7 +402,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 					}
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
 					gateway.rdb.TTL(ctx, "ip:"+ip).SetVal(time.Hour * 12)
-					return errors.New("blocked because ip")
+					return errors.New("blocked because ip " + country)
 				}
 			}
 			if MojangAPIenabled {
@@ -540,11 +540,11 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 								return errors.New("Could not query Mojang: " + err.Error())
 							}
 						} else {
-							err = gateway.rdb.Set(ctx, "username:"+name, "true", time.Hour*12).Err()
+							err = gateway.rdb.Set(ctx, "username:"+name, "half", time.Hour*12).Err()
 							if err != nil {
 								log.Println(err)
 							}
-							err = gateway.rdb.Set(ctx, "ip:"+ip, "true,"+country, time.Hour*24).Err()
+							err = gateway.rdb.Set(ctx, "ip:"+ip, "half,"+country, time.Hour*24).Err()
 							if err != nil {
 								log.Println(err)
 							}
