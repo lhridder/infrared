@@ -19,6 +19,7 @@ import (
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
 	"github.com/haveachin/infrared/protocol/play"
+	"github.com/haveachin/infrared/protocol/status"
 	"github.com/oschwald/geoip2-golang"
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
@@ -287,12 +288,24 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	proxyUID := proxyUID(serverAddress, addr)
 	log.Printf("[i] %s requests proxy with UID %s", connRemoteAddr, proxyUID)
 
+	ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
+	country := ""
+
 	v, ok := gateway.Proxies.Load(proxyUID)
 	if !ok {
 		if gateway.underAttack {
 			_ = conn.Close()
 			return nil
 		}
+
+		if GeoIPenabled {
+			record, err := gateway.db.Country(net.ParseIP(ip))
+			country = record.Country.IsoCode
+			if err != nil {
+				log.Printf("[i] failed to lookup country for %s", connRemoteAddr)
+			}
+		}
+
 		if hs.IsStatusRequest() {
 			_, err := conn.ReadPacket()
 			if err != nil {
@@ -304,10 +317,24 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 				return err
 			}
 
-			pingPk, _ := conn.ReadPacket()
-			err = conn.WritePacket(pingPk)
+			pingPacket, err := conn.ReadPacket()
+			if err != nil {
+				return err
+			}
 
-			handshakeCount.With(prometheus.Labels{"type": "status", "host": serverAddress, "country": ""}).Inc()
+			ping, err := status.UnmarshalServerBoundPing(pingPacket)
+			if err != nil {
+				return err
+			}
+
+			err = conn.WritePacket(status.ClientBoundPong{
+				Payload: ping.Payload,
+			}.Marshal())
+			if err != nil {
+				return err
+			}
+
+			handshakeCount.With(prometheus.Labels{"type": "status", "host": serverAddress, "country": country}).Inc()
 
 			if err != nil {
 				return err
@@ -321,14 +348,12 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 		if err != nil {
 			log.Println(err)
 		}
-		handshakeCount.With(prometheus.Labels{"type": "login", "host": serverAddress, "country": ""}).Inc()
+		handshakeCount.With(prometheus.Labels{"type": "login", "host": serverAddress, "country": country}).Inc()
 
 		return errors.New("no proxy with uid " + proxyUID)
 	}
 	proxy := v.(*Proxy)
 
-	ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
-	country := ""
 	if hs.IsLoginRequest() {
 		loginPacket, err := conn.ReadPacket()
 		if err != nil {
