@@ -102,7 +102,7 @@ func main() {
 		}
 	}()
 
-	gateway := infrared.Gateway{}
+	gateway := infrared.Gateway{ReceiveProxyProtocol: receiveProxyProtocol}
 	go func() {
 		for {
 			cfg, ok := <-outCfgs

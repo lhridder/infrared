@@ -51,7 +51,7 @@ type Gateway struct {
 	Proxies              sync.Map
 	closed               chan bool
 	wg                   sync.WaitGroup
-	receiveProxyProtocol bool
+	ReceiveProxyProtocol bool
 	underAttack          bool
 	connections          int
 	db                   *geoip2.Reader
@@ -272,7 +272,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	gateway.connections++
 
 	connRemoteAddr := conn.RemoteAddr()
-	if gateway.receiveProxyProtocol {
+	if gateway.ReceiveProxyProtocol {
 		header, err := proxyproto.Read(conn.Reader())
 		if err != nil {
 			return err
