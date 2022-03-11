@@ -236,11 +236,12 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 				log.Printf("[>] Incoming %s on listener %s", conn.RemoteAddr(), addr)
 			}
 			defer conn.Close()
-			_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+			_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 			if err := gateway.serve(conn, addr); err != nil {
-				if errors.Is(err, protocol.ErrInvalidPacketID) {
+				if errors.Is(err, protocol.ErrInvalidPacketID) || errors.Is(err, protocol.ErrInvalidPacketLength) {
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_invalid", "host": "", "country": ""}).Inc()
 				}
+
 				if Debug {
 					log.Printf("[x] %s closed connection with %s; error: %s", conn.RemoteAddr(), addr, err)
 				}
@@ -346,10 +347,6 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			}
 
 			handshakeCount.With(prometheus.Labels{"type": "status", "host": serverAddress, "country": country}).Inc()
-
-			if err != nil {
-				return err
-			}
 		}
 
 		// Client send an invalid address/port; we don't have a v for that address
@@ -467,6 +464,12 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 						}
 
 						encryptionResponse, err := conn.ReadPacket()
+						if err != nil {
+							handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": serverAddress, "country": country}).Inc()
+							err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+country, time.Hour*12).Err()
+							return errors.New("invalid encryption response")
+						}
+
 						encryptionRes, err := login.UnmarshalServerBoundEncryptionResponse(encryptionResponse)
 						if err != nil {
 							handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": serverAddress, "country": country}).Inc()
@@ -565,6 +568,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 						return errors.New("blocked for rejoin (auth)")
 					}
 				} else {
+					//TODO retire
 					_, err = gateway.rdb.Get(ctx, "username:"+name).Result()
 					if err == redis.Nil {
 						_, err := gateway.api.FetchUUID(name)

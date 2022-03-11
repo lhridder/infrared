@@ -58,7 +58,7 @@ func ReadPacketBytes(r DecodeReader) ([]byte, error) {
 	}
 
 	if packetLength < 1 {
-		return nil, fmt.Errorf("packet length too short")
+		return nil, ErrInvalidPacketLength
 	}
 
 	data := make([]byte, packetLength)

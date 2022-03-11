@@ -5,5 +5,6 @@ import (
 )
 
 var (
-	ErrInvalidPacketID = errors.New("invalid packet id")
+	ErrInvalidPacketID     = errors.New("invalid packet id")
+	ErrInvalidPacketLength = errors.New("packet length too short")
 )
