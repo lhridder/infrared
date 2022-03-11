@@ -90,6 +90,7 @@ func (gateway *Gateway) ListenAndServe(proxies []*Proxy) error {
 	if UnderAttack {
 		log.Println("Enabled permanent underAttack mode")
 		gateway.underAttack = true
+		underAttackStatus.Set(1)
 	}
 
 	gateway.closed = make(chan bool, len(proxies))
