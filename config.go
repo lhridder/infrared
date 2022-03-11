@@ -52,6 +52,7 @@ type GlobalConfig struct {
 	RedisDB                int      `json:"redisDB"`
 	RedisPass              string   `json:"redisPass"`
 	UnderAttack            bool     `json:"underAttack"`
+	Debug                  bool     `json:"debug"`
 }
 
 var (
@@ -69,6 +70,7 @@ var (
 	RedisDB                = 0
 	RedisPass              = ""
 	UnderAttack            = false
+	Debug                  = false
 )
 
 func (cfg *ProxyConfig) Dialer() (*Dialer, error) {
@@ -431,6 +433,7 @@ func LoadGlobalConfig() {
 	RedisDB = config.RedisDB
 	RedisPass = config.RedisPass
 	UnderAttack = config.UnderAttack
+	Debug = config.Debug
 }
 
 func DefaultStatusResponse() protocol.Packet {

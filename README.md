@@ -42,7 +42,9 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
   "mojangAPIenabled": false,
   "redisHost": "localhost",
   "redisDB": 0,
-  "redisPass": ""
+  "redisPass": "",
+  "underAttack": false,
+  "debug": false
 }
 ```
 ### Fields
@@ -58,7 +60,8 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 `redisHost` what redis server to connect to when caching geoip and username lookups.
 `redisDB` what redis db should be used on the redis server.
 `redisPass` what password should be used when logging into the redis server.
-``
+`underAttack` if the instance should permanently be in attack mode
+`debug` if debug logs should be enabled
 
 
 ## Proxy Config

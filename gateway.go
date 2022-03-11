@@ -232,16 +232,24 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 		}
 
 		go func() {
-			log.Printf("[>] Incoming %s on listener %s", conn.RemoteAddr(), addr)
+			if Debug {
+				log.Printf("[>] Incoming %s on listener %s", conn.RemoteAddr(), addr)
+			}
 			defer conn.Close()
+			_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 			if err := gateway.serve(conn, addr); err != nil {
 				if errors.Is(err, protocol.ErrInvalidPacketID) {
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_invalid", "host": "", "country": ""}).Inc()
 				}
-				log.Printf("[x] %s closed connection with %s; error: %s", conn.RemoteAddr(), addr, err)
+				if Debug {
+					log.Printf("[x] %s closed connection with %s; error: %s", conn.RemoteAddr(), addr, err)
+				}
 				return
 			}
-			log.Printf("[x] %s closed connection with %s", conn.RemoteAddr(), addr)
+			_ = conn.SetDeadline(time.Time{})
+			if Debug {
+				log.Printf("[x] %s closed connection with %s", conn.RemoteAddr(), addr)
+			}
 		}()
 	}
 }
@@ -287,7 +295,9 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	}
 
 	proxyUID := proxyUID(serverAddress, addr)
-	log.Printf("[i] %s requests proxy with UID %s", connRemoteAddr, proxyUID)
+	if Debug {
+		log.Printf("[i] %s requests proxy with UID %s", connRemoteAddr, proxyUID)
+	}
 
 	ip, _, _ := net.SplitHostPort(connRemoteAddr.String())
 	country := ""
@@ -596,6 +606,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			}
 		}
 		handshakeCount.With(prometheus.Labels{"type": "login", "host": serverAddress, "country": country}).Inc()
+		_ = conn.SetDeadline(time.Time{})
 		if err := proxy.handleConn(conn, connRemoteAddr, handshakePacket, loginPacket); err != nil {
 			return err
 		}
