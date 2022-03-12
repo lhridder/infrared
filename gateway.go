@@ -382,12 +382,12 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 						Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "Please rejoin to verify your connection.")),
 					}.Marshal())
 					if err != nil {
-						log.Println(err)
+						return err
 					}
 
 					err := conn.Close()
 					if err != nil {
-						log.Println(err)
+						return err
 					}
 
 					if contains(CountryWhitelist, country) {
@@ -431,7 +431,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 				if results[0] == "false" && gateway.underAttack {
 					err := conn.Close()
 					if err != nil {
-						log.Println(err)
+						return err
 					}
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": serverAddress, "country": country}).Inc()
 					gateway.rdb.TTL(ctx, "ip:"+ip).SetVal(time.Hour * 12)
