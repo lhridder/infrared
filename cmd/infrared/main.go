@@ -2,13 +2,11 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/haveachin/infrared"
 	"github.com/haveachin/infrared/api"
 	"log"
 	"os"
 	"strconv"
-	"syscall"
 )
 
 const (
@@ -67,15 +65,6 @@ func init() {
 }
 
 func main() {
-	var rLimit syscall.Rlimit
-	rLimit.Max = 999999
-	rLimit.Cur = 999999
-
-	err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		fmt.Println("Error Setting Rlimit ", err)
-	}
-
 	log.Println("Loading global config")
 	infrared.LoadGlobalConfig()
 
