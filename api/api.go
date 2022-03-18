@@ -15,6 +15,7 @@ func ListenAndServe(configPath string, apiBind string) {
 	log.Println("Starting WebAPI on " + apiBind)
 	router := mux.NewRouter()
 
+	router.HandleFunc("/", getHome()).Methods("GET")
 	router.HandleFunc("/proxies", getProxies(configPath)).Methods("GET")
 	router.HandleFunc("/proxies/{fileName}", getProxy(configPath)).Methods("GET")
 	router.HandleFunc("/proxies/{fileName}", addProxyWithName(configPath)).Methods("POST")
@@ -24,6 +25,13 @@ func ListenAndServe(configPath string, apiBind string) {
 	if err != nil {
 		log.Fatal(err)
 		return
+	}
+}
+
+// getHome
+func getHome() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
 	}
 }
 

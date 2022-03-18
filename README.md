@@ -206,6 +206,8 @@ will return 200(OK)
 
 DELETE `/proxies/{fileName}` will return 200(OK)
 
+GET `/` will return 200(OK)
+
 ## Used sources
 - [Minecraft protocol documentation](https://wiki.vg/Protocol)
 - [Minecraft protocol implementation in golang 1](https://github.com/specspace/plasma)
