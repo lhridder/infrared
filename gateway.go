@@ -148,7 +148,7 @@ func (gateway *Gateway) Close() {
 }
 
 func (gateway *Gateway) CloseProxy(proxyUID string) {
-	log.Println("Closing proxy with UID", proxyUID)
+	log.Println("Closing config with UID", proxyUID)
 	v, ok := gateway.Proxies.Load(proxyUID)
 	if !ok {
 		return
@@ -190,6 +190,18 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 	for _, uid := range uids {
 		log.Println("Registering proxy with UID", uid)
 		gateway.Proxies.Store(uid, proxy)
+	}
+	proxyUID := proxy.UID()
+
+	proxy.Config.removeCallback = func() {
+		gateway.CloseProxy(proxyUID)
+	}
+
+	proxy.Config.changeCallback = func() {
+		gateway.CloseProxy(proxyUID)
+		if err := gateway.RegisterProxy(proxy); err != nil {
+			log.Println(err)
+		}
 	}
 
 	playersConnected.WithLabelValues(proxy.DomainName())

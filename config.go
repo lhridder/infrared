@@ -23,7 +23,9 @@ type ProxyConfig struct {
 	sync.RWMutex
 	watcher *fsnotify.Watcher
 
-	dialer *Dialer
+	removeCallback func()
+	changeCallback func()
+	dialer         *Dialer
 
 	DomainNames       []string     `json:"domainNames"`
 	ListenTo          string       `json:"listenTo"`
@@ -309,6 +311,7 @@ func (cfg *ProxyConfig) watch(path string, interval time.Duration) {
 				return
 			}
 			if event.Op&fsnotify.Remove == fsnotify.Remove {
+				cfg.removeCallback()
 				return
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
@@ -332,6 +335,7 @@ func (cfg *ProxyConfig) onConfigWrite(event fsnotify.Event) {
 	cfg.OnlineStatus.cachedPacket = nil
 	cfg.OfflineStatus.cachedPacket = nil
 	cfg.dialer = nil
+	cfg.changeCallback()
 }
 
 // LoadFromPath loads the ProxyConfig from a file
@@ -390,7 +394,7 @@ func WatchProxyConfigFolder(path string, out chan *ProxyConfig) error {
 			if !ok {
 				return nil
 			}
-			if event.Op&fsnotify.Create == fsnotify.Create {
+			if event.Op&fsnotify.Create == fsnotify.Create && filepath.Ext(event.Name) == ".json" {
 				proxyCfg, err := NewProxyConfigFromPath(event.Name)
 				if err != nil {
 					log.Printf("Failed loading %s; error %s", event.Name, err)

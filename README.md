@@ -182,12 +182,12 @@ scrape_configs:
 GET `/proxies` will return
 ```json
 [
-"config.json",
-"config2.json"
+"config",
+"config2"
 ]
 ```
 
-GET `/proxies/{fileName}` will return
+GET `/proxies/{name}` will return
 ```json
 {
 "domainNames": ["play.example.org"],
@@ -195,7 +195,7 @@ GET `/proxies/{fileName}` will return
 }
 ```
 
-POST `/proxies/{fileName}` with body
+POST `/proxies/{name}` with body
 ```json
 {
 "domainNames": ["play.example.org"],
@@ -204,7 +204,7 @@ POST `/proxies/{fileName}` with body
 ```
 will return 200(OK)
 
-DELETE `/proxies/{fileName}` will return 200(OK)
+DELETE `/proxies/{name}` will return 200(OK)
 
 GET `/` will return 200(OK)
 
