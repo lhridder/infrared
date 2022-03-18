@@ -30,9 +30,7 @@ func ListenAndServe(configPath string, apiBind string) {
 
 // getHome
 func getHome() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}
+	return func(w http.ResponseWriter, r *http.Request) {}
 }
 
 // getProxies
