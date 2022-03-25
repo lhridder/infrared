@@ -1,6 +1,7 @@
 package infrared
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
@@ -227,7 +228,24 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 			return err
 		}
 
-		err = conn.WritePacket(proxy.cacheResponse)
+		cachedResponse, _ := status.UnmarshalClientBoundResponse(proxy.cacheResponse)
+		var JSONResponse status.ResponseJSON
+		_ = json.Unmarshal([]byte(cachedResponse.JSONResponse), &JSONResponse)
+		responseJSON, err := json.Marshal(status.ResponseJSON{
+			Version: status.VersionJSON{
+				Name:     JSONResponse.Version.Name,
+				Protocol: int(hs.ProtocolVersion),
+			},
+			Players:     JSONResponse.Players,
+			Description: JSONResponse.Description,
+			Favicon:     JSONResponse.Favicon,
+		})
+		if err != nil {
+			return err
+		}
+		err = conn.WritePacket(status.ClientBoundResponse{
+			JSONResponse: protocol.String(responseJSON),
+		}.Marshal())
 		if err != nil {
 			return err
 		}
@@ -280,6 +298,7 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 	}
 
 	if proxy.RealIP() {
+		log.Println("realip")
 		hs.UpgradeToRealIP(connRemoteAddr, time.Now())
 		handshakePacket = hs.Marshal()
 	}
