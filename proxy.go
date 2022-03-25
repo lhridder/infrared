@@ -37,7 +37,7 @@ type Proxy struct {
 	mu                sync.Mutex
 
 	cacheTime     time.Time
-	cacheResponse protocol.Packet
+	cacheResponse status.ClientBoundResponse
 }
 
 func (proxy *Proxy) DomainNames() []string {
@@ -159,6 +159,17 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 		if proxy.IsOnlineStatusConfigured() {
 			return proxy.handleStatusRequest(conn, true)
 		}
+
+		statusRequest, err := conn.ReadPacket()
+		if err != nil {
+			return err
+		}
+
+		_, err = status.UnmarshalServerBoundRequest(statusRequest)
+		if err != nil {
+			return err
+		}
+
 		if proxy.cacheTime.IsZero() || time.Now().Sub(proxy.cacheTime) > 30*time.Second {
 			log.Printf("[i] Updating cache for %s", proxyUID)
 			dialer, err := proxy.Dialer()
@@ -204,16 +215,16 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 				return err
 			}
 
-			err = rconn.WritePacket(status.ServerBoundRequest{}.Marshal())
+			err = rconn.WritePacket(statusRequest)
 			if err != nil {
 				return err
 			}
 
-			clientboundResponse, err := rconn.ReadPacket()
+			clientboundResponsePacket, err := rconn.ReadPacket()
 			if err != nil {
 				return err
 			}
-			_, err = status.UnmarshalClientBoundResponse(clientboundResponse)
+			clientboundResponse, err := status.UnmarshalClientBoundResponse(clientboundResponsePacket)
 			if err != nil {
 				return err
 			}
@@ -223,14 +234,13 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 
 			rconn.Close()
 		}
-		_, err := conn.ReadPacket()
+
+		var JSONResponse status.ResponseJSON
+		err = json.Unmarshal([]byte(proxy.cacheResponse.JSONResponse), &JSONResponse)
 		if err != nil {
 			return err
 		}
 
-		cachedResponse, _ := status.UnmarshalClientBoundResponse(proxy.cacheResponse)
-		var JSONResponse status.ResponseJSON
-		_ = json.Unmarshal([]byte(cachedResponse.JSONResponse), &JSONResponse)
 		responseJSON, err := json.Marshal(status.ResponseJSON{
 			Version: status.VersionJSON{
 				Name:     JSONResponse.Version.Name,
