@@ -202,7 +202,10 @@ POST `/proxies/{name}` with body
 "proxyTo": "backend.example.org:25566"
 }
 ```
-will return 200(OK)
+will return
+```json
+{"success": true, "message": "the proxy has been succesfully added"}
+```
 
 DELETE `/proxies/{name}` will return 200(OK)
 
