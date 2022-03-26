@@ -100,10 +100,11 @@ func addProxyWithName(configPath string) http.HandlerFunc {
 		jsonIsValid := checkJSONAndRegister(rawData, fileName, configPath)
 		if jsonIsValid {
 			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("{'success': true, 'message': 'the proxy has been added succesfully'}"))
 			return
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("{'error': 'domainNames and proxyTo could not be found'}"))
+			w.Write([]byte("{'success': false, 'message': 'domainNames and proxyTo could not be found'}"))
 			return
 		}
 	}
