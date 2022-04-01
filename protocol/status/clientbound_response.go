@@ -1,6 +1,7 @@
 package status
 
 import (
+	"encoding/json"
 	"github.com/haveachin/infrared/protocol"
 )
 
@@ -36,7 +37,7 @@ func UnmarshalClientBoundResponse(packet protocol.Packet) (ClientBoundResponse, 
 type ResponseJSON struct {
 	Version     VersionJSON     `json:"version"`
 	Players     PlayersJSON     `json:"players"`
-	Description DescriptionJSON `json:"description"`
+	Description json.RawMessage `json:"description"`
 	Favicon     string          `json:"favicon"`
 }
 

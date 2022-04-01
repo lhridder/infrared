@@ -131,9 +131,7 @@ func (cfg StatusConfig) StatusResponsePacket() (protocol.Packet, error) {
 			Online: cfg.PlayersOnline,
 			Sample: samples,
 		},
-		Description: status.DescriptionJSON{
-			Text: cfg.MOTD,
-		},
+		Description: json.RawMessage(fmt.Sprintf("{\"text\":\"%s\"}", cfg.MOTD)),
 	}
 
 	if cfg.IconPath != "" {
@@ -450,9 +448,7 @@ func DefaultStatusResponse() protocol.Packet {
 			Max:    0,
 			Online: 0,
 		},
-		Description: status.DescriptionJSON{
-			Text: GenericPingDescription,
-		},
+		Description: json.RawMessage(fmt.Sprintf("{\"text\":\"%s\"}", GenericPingDescription)),
 	}
 	bb, _ := json.Marshal(responseJSON)
 
