@@ -62,7 +62,7 @@ type Gateway struct {
 }
 
 func (gateway *Gateway) LoadDB() {
-	gateway.db, _ = geoip2.Open(GeoIPdatabasefile)
+	gateway.db, _ = geoip2.Open(Config.GeoIPdatabasefile)
 }
 
 func (gateway *Gateway) LoadMojangAPI() {
@@ -71,9 +71,9 @@ func (gateway *Gateway) LoadMojangAPI() {
 
 func (gateway *Gateway) ConnectRedis() error {
 	gateway.rdb = redis.NewClient(&redis.Options{
-		Addr:     RedisHost + ":6379",
-		Password: RedisPass,
-		DB:       RedisDB,
+		Addr:     Config.RedisHost + ":6379",
+		Password: Config.RedisPass,
+		DB:       Config.RedisDB,
 	})
 	_, err := gateway.rdb.Ping(ctx).Result()
 	if err != nil {
@@ -87,7 +87,7 @@ func (gateway *Gateway) ListenAndServe(proxies []*Proxy) error {
 		return errors.New("no proxies in gateway")
 	}
 
-	if UnderAttack {
+	if Config.UnderAttack {
 		log.Println("Enabled permanent underAttack mode")
 		gateway.underAttack = true
 		underAttackStatus.Set(1)
@@ -244,7 +244,7 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 		}
 
 		go func() {
-			if Debug {
+			if Config.Debug {
 				log.Printf("[>] Incoming %s on listener %s", conn.RemoteAddr(), addr)
 			}
 			defer conn.Close()
@@ -254,13 +254,13 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_invalid", "host": "", "country": ""}).Inc()
 				}
 
-				if Debug {
+				if Config.Debug {
 					log.Printf("[x] %s closed connection with %s; error: %s", conn.RemoteAddr(), addr, err)
 				}
 				return
 			}
 			_ = conn.SetDeadline(time.Time{})
-			if Debug {
+			if Config.Debug {
 				log.Printf("[x] %s closed connection with %s", conn.RemoteAddr(), addr)
 			}
 		}()
@@ -308,7 +308,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	}
 
 	proxyUID := proxyUID(serverAddress, addr)
-	if Debug {
+	if Config.Debug {
 		log.Printf("[i] %s requests proxy with UID %s", connRemoteAddr, proxyUID)
 	}
 
@@ -322,7 +322,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			return nil
 		}
 
-		if GeoIPenabled {
+		if Config.GeoIPenabled {
 			record, err := gateway.db.Country(net.ParseIP(ip))
 			country = record.Country.IsoCode
 			if err != nil {
@@ -380,7 +380,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			return err
 		}
 
-		if GeoIPenabled {
+		if Config.GeoIPenabled {
 			result, err := gateway.rdb.Get(ctx, "ip:"+ip).Result()
 			if err == redis.Nil {
 				record, err := gateway.db.Country(net.ParseIP(ip))
@@ -402,7 +402,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 						return err
 					}
 
-					if contains(CountryWhitelist, country) {
+					if contains(Config.GeoIPCountryWhitelist, country) {
 						handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": serverAddress, "country": country}).Inc()
 
 						err = gateway.rdb.Set(ctx, "ip:"+ip, "half,"+country, time.Hour*24).Err()
@@ -420,7 +420,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 						return errors.New("blocked because ip " + country)
 					}
 				} else {
-					if contains(CountryWhitelist, country) {
+					if contains(Config.GeoIPCountryWhitelist, country) {
 						err = gateway.rdb.Set(ctx, "ip:"+ip, "half,"+country, time.Hour*24).Err()
 						if err != nil {
 							log.Println(err)
@@ -450,7 +450,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 					return errors.New("blocked because ip " + country)
 				}
 			}
-			if MojangAPIenabled {
+			if Config.MojangAPIenabled {
 				ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
 				if err != nil {
 					return err
@@ -629,7 +629,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	}
 
 	if hs.IsStatusRequest() {
-		if GeoIPenabled {
+		if Config.GeoIPenabled {
 			record, err := gateway.db.Country(net.ParseIP(ip))
 			country = record.Country.IsoCode
 			if err != nil {

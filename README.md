@@ -27,8 +27,8 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 
 `./infrared -config-path="." -receive-proxy-protocol=true`
 
-## Global Config
-### Example
+## Global config.json
+### Example/Default
 ```json
 {
   "prometheusEnabled": false,
@@ -48,6 +48,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
   "debug": false
 }
 ```
+Values can be left out if they don't deviate from the default, a config.json with just `{}` is still required for startup.
 ### Fields
 - `prometheusEnabled` whether to enable to builtin prometheus exporter or not.
 - `prometheusBind` on what port/address to have the prometheus exporter listen on.

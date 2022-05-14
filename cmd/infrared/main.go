@@ -106,11 +106,11 @@ func main() {
 		}
 	}()
 
-	if infrared.ApiEnabled {
-		go api.ListenAndServe(configPath, infrared.ApiBind)
+	if infrared.Config.ApiEnabled {
+		go api.ListenAndServe(configPath, infrared.Config.ApiBind)
 	}
 
-	if infrared.GeoIPenabled {
+	if infrared.Config.GeoIPenabled {
 		log.Println("Loading GeoIPDB")
 		gateway.LoadDB()
 		log.Println("Loading Redis")
@@ -119,7 +119,7 @@ func main() {
 			log.Println(err)
 			return
 		}
-		if infrared.MojangAPIenabled {
+		if infrared.Config.MojangAPIenabled {
 			log.Println("Loading Mojang API instance")
 			gateway.LoadMojangAPI()
 			err := gateway.GenerateKeys()
@@ -129,15 +129,15 @@ func main() {
 		}
 	}
 
-	if infrared.PrometheusEnabled {
-		err := gateway.EnablePrometheus(infrared.PrometheusBind)
+	if infrared.Config.PrometheusEnabled {
+		err := gateway.EnablePrometheus(infrared.Config.PrometheusBind)
 		if err != nil {
 			log.Println(err)
 			return
 		}
 	}
 
-	if !infrared.UnderAttack {
+	if !infrared.Config.UnderAttack {
 		go func() {
 			for {
 				gateway.ClearCps()

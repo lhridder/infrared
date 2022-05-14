@@ -57,23 +57,25 @@ type GlobalConfig struct {
 	Debug                  bool     `json:"debug"`
 }
 
-var (
-	PrometheusEnabled      = false
-	PrometheusBind         = ":9100"
-	ApiEnabled             = false
-	ApiBind                = ":5000"
-	GenericPingVersion     = "Infrared"
-	GenericPingDescription = "There is no proxy associated with this domain. Please check your configuration."
-	GeoIPenabled           = false
-	GeoIPdatabasefile      string
-	CountryWhitelist       []string
-	MojangAPIenabled       = false
-	RedisHost              = ""
-	RedisDB                = 0
-	RedisPass              = ""
-	UnderAttack            = false
-	Debug                  = false
-)
+var Config GlobalConfig
+
+var DefaultConfig = GlobalConfig{
+	PrometheusEnabled:      false,
+	PrometheusBind:         ":9100",
+	ApiEnabled:             false,
+	ApiBind:                ":5000",
+	GenericPingVersion:     "Infrared",
+	GenericPingDescription: "There is no proxy associated with this domain. Please check your configuration.",
+	GeoIPenabled:           false,
+	GeoIPdatabasefile:      "",
+	GeoIPCountryWhitelist:  []string{},
+	MojangAPIenabled:       false,
+	RedisHost:              "localhost",
+	RedisDB:                0,
+	RedisPass:              "",
+	UnderAttack:            false,
+	Debug:                  false,
+}
 
 func (cfg *ProxyConfig) Dialer() (*Dialer, error) {
 	if cfg.dialer != nil {
@@ -188,7 +190,7 @@ func DefaultProxyConfig() ProxyConfig {
 		Timeout:           1000,
 		DisconnectMessage: "Sorry {{username}}, but the server is offline.",
 		OfflineStatus: StatusConfig{
-			VersionName:    GenericPingVersion,
+			VersionName:    Config.GenericPingVersion,
 			ProtocolNumber: 757,
 			MaxPlayers:     20,
 			MOTD:           "Server is currently offline.",
@@ -414,41 +416,27 @@ func LoadGlobalConfig() {
 	if err != nil {
 		panic(err)
 	}
-	var config GlobalConfig
+	var config = DefaultConfig
 	jsonParser := json.NewDecoder(jsonFile)
 	err = jsonParser.Decode(&config)
 	if err != nil {
 		panic(err)
 	}
+	Config = config
 	_ = jsonFile.Close()
-	ApiEnabled = config.ApiEnabled
-	ApiBind = config.ApiBind
-	PrometheusEnabled = config.PrometheusEnabled
-	PrometheusBind = config.PrometheusBind
-	GenericPingVersion = config.GenericPingVersion
-	GenericPingDescription = config.GenericPingDescription
-	GeoIPenabled = config.GeoIPenabled
-	GeoIPdatabasefile = config.GeoIPdatabasefile
-	CountryWhitelist = config.GeoIPCountryWhitelist
-	MojangAPIenabled = config.MojangAPIenabled
-	RedisHost = config.RedisHost
-	RedisDB = config.RedisDB
-	RedisPass = config.RedisPass
-	UnderAttack = config.UnderAttack
-	Debug = config.Debug
 }
 
 func DefaultStatusResponse() protocol.Packet {
 	responseJSON := status.ResponseJSON{
 		Version: status.VersionJSON{
-			Name:     GenericPingVersion,
+			Name:     Config.GenericPingVersion,
 			Protocol: 0,
 		},
 		Players: status.PlayersJSON{
 			Max:    0,
 			Online: 0,
 		},
-		Description: json.RawMessage(fmt.Sprintf("{\"text\":\"%s\"}", GenericPingDescription)),
+		Description: json.RawMessage(fmt.Sprintf("{\"text\":\"%s\"}", Config.GenericPingDescription)),
 	}
 	bb, _ := json.Marshal(responseJSON)
 
