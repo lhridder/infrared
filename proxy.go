@@ -156,10 +156,6 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 	proxyUID := proxy.UID()
 
 	if hs.IsStatusRequest() {
-		if proxy.IsOnlineStatusConfigured() {
-			return proxy.handleStatusRequest(conn, true)
-		}
-
 		statusRequest, err := conn.ReadPacket()
 		if err != nil {
 			return err
@@ -168,6 +164,10 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 		_, err = status.UnmarshalServerBoundRequest(statusRequest)
 		if err != nil {
 			return err
+		}
+
+		if proxy.IsOnlineStatusConfigured() {
+			return proxy.handleStatusRequest(conn, true)
 		}
 
 		if proxy.cacheTime.IsZero() || time.Now().Sub(proxy.cacheTime) > 30*time.Second {
@@ -386,12 +386,7 @@ func (proxy *Proxy) handleLoginRequest(conn Conn) error {
 }
 
 func (proxy *Proxy) handleStatusRequest(conn Conn, online bool) error {
-	// Read the request packet and send status response back
-	_, err := conn.ReadPacket()
-	if err != nil {
-		return err
-	}
-
+	var err error
 	var responsePk protocol.Packet
 	if online {
 		responsePk, err = proxy.OnlineStatusPacket()
