@@ -15,6 +15,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 - Allow multiple domains in 1 configfile
 - Global .json config
 - Removed docker and callback features
+- Status packet caching
 
 ## Command-Line Flags
 
@@ -48,20 +49,20 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 }
 ```
 ### Fields
-`prometheusEnabled` whether to enable to builtin prometheus exporter or not.
-`prometheusBind` on what port/address to have the prometheus exporter listen on.
-`apiEnabled` if the json http api should be enabled.
-`apiBind` on what port/address to have the api listen on.
-`genericPingVersion` what response should be sent if a connecting player supplies an unknown domain.
-`geoIPenabled` if geoip checks should be enabled.
-`geoIPdatabasefile` where the .mmdb file is located for geoip checks.
-`geoIpcountryWhitelist` what countries should be whitelisted when doing geoip checks (2 letter notation).
-`mojangAPIenabled` whether to enable mojang API username checks (only works if geoip is enabled).
-`redisHost` what redis server to connect to when caching geoip and username lookups.
-`redisDB` what redis db should be used on the redis server.
-`redisPass` what password should be used when logging into the redis server.
-`underAttack` if the instance should permanently be in attack mode
-`debug` if debug logs should be enabled
+- `prometheusEnabled` whether to enable to builtin prometheus exporter or not.
+- `prometheusBind` on what port/address to have the prometheus exporter listen on.
+- `apiEnabled` if the json http api should be enabled.
+- `apiBind` on what port/address to have the api listen on.
+- `genericPingVersion` what response should be sent if a connecting player supplies an unknown domain.
+- `geoIPenabled` if geoip checks should be enabled.
+- `geoIPdatabasefile` where the .mmdb file is located for geoip checks.
+- `geoIpcountryWhitelist` what countries should be whitelisted when doing geoip checks (2 letter notation).
+- `mojangAPIenabled` whether to enable mojang API username checks (only works if geoip is enabled).
+- `redisHost` what redis server to connect to when caching geoip and username lookups.
+- `redisDB` what redis db should be used on the redis server.
+- `redisPass` what password should be used when logging into the redis server.
+- `underAttack` if the instance should permanently be in attack mode.
+- `debug` if debug logs should be enabled.
 
 
 ## Proxy Config
