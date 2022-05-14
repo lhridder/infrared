@@ -36,8 +36,9 @@ type Proxy struct {
 	players           map[Conn]string
 	mu                sync.Mutex
 
-	cacheTime     time.Time
-	cacheResponse status.ClientBoundResponse
+	cacheTime         time.Time
+	cacheResponse     status.ClientBoundResponse
+	cacheOnlineStatus bool
 }
 
 func (proxy *Proxy) DomainNames() []string {
@@ -180,6 +181,10 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 			rconn, err := dialer.Dial(proxyTo)
 			if err != nil {
 				log.Printf("[i] %s did not respond to ping; is the target offline?", proxyTo)
+				proxy.cacheOnlineStatus = false
+				proxy.cacheTime = time.Now()
+				proxy.cacheResponse = status.ClientBoundResponse{}
+
 				return proxy.handleStatusRequest(conn, false)
 			}
 
@@ -229,10 +234,18 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 				return err
 			}
 
+			proxy.cacheOnlineStatus = true
 			proxy.cacheTime = time.Now()
 			proxy.cacheResponse = clientboundResponse
 
 			rconn.Close()
+		}
+
+		if !proxy.cacheOnlineStatus {
+			if Config.Debug {
+				log.Printf("[i] Sent %s cached offline response for %s", connRemoteAddr, proxyUID)
+			}
+			return proxy.handleStatusRequest(conn, false)
 		}
 
 		var JSONResponse status.ResponseJSON
@@ -277,7 +290,9 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 			return err
 		}
 
-		log.Printf("[i] Sent %s cached response for %s", connRemoteAddr, proxyUID)
+		if Config.Debug {
+			log.Printf("[i] Sent %s cached response for %s", connRemoteAddr, proxyUID)
+		}
 		return nil
 	}
 
