@@ -45,7 +45,8 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
   "redisDB": 0,
   "redisPass": "",
   "underAttack": false,
-  "debug": false
+  "debug": false,
+  "connectionTreshold": 50
 }
 ```
 Values can be left out if they don't deviate from the default, a config.json with just `{}` is still required for startup.
@@ -64,6 +65,7 @@ Values can be left out if they don't deviate from the default, a config.json wit
 - `redisPass` what password should be used when logging into the redis server.
 - `underAttack` if the instance should permanently be in attack mode.
 - `debug` if debug logs should be enabled.
+- `connectionTreshold` at what amount of packets per second the underAttack mode should trigger.`
 
 
 ## Proxy Config

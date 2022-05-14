@@ -645,7 +645,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 }
 
 func (gateway *Gateway) ClearCps() {
-	if gateway.connections >= 20 {
+	if gateway.connections >= Config.ConnectionTreshold {
 		gateway.underAttack = true
 		underAttackStatus.Set(1)
 		log.Printf("[i] Reached connections treshold: %s", strconv.Itoa(gateway.connections))

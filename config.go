@@ -55,6 +55,7 @@ type GlobalConfig struct {
 	RedisPass              string   `json:"redisPass"`
 	UnderAttack            bool     `json:"underAttack"`
 	Debug                  bool     `json:"debug"`
+	ConnectionTreshold     int      `json:"connectionTreshold"`
 }
 
 var Config GlobalConfig
@@ -75,6 +76,7 @@ var DefaultConfig = GlobalConfig{
 	RedisPass:              "",
 	UnderAttack:            false,
 	Debug:                  false,
+	ConnectionTreshold:     50,
 }
 
 func (cfg *ProxyConfig) Dialer() (*Dialer, error) {
