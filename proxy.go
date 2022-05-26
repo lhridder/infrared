@@ -146,155 +146,14 @@ func (proxy *Proxy) removePlayer(conn Conn) int {
 	return len(proxy.players)
 }
 
-func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePacket protocol.Packet, loginPacket protocol.Packet) error {
-	hs, err := handshaking.UnmarshalServerBoundHandshake(handshakePacket)
+func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
+	hs, err := handshaking.UnmarshalServerBoundHandshake(session.handshakePacket)
 	if err != nil {
 		return err
 	}
 
 	proxyDomain := proxy.DomainName()
 	proxyTo := proxy.ProxyTo()
-	proxyUID := proxy.UID()
-
-	if hs.IsStatusRequest() {
-		statusRequest, err := conn.ReadPacket()
-		if err != nil {
-			return err
-		}
-
-		_, err = status.UnmarshalServerBoundRequest(statusRequest)
-		if err != nil {
-			return err
-		}
-
-		if proxy.IsOnlineStatusConfigured() {
-			return proxy.handleStatusRequest(conn, true)
-		}
-
-		if proxy.cacheTime.IsZero() || time.Now().Sub(proxy.cacheTime) > 30*time.Second {
-			log.Printf("[i] Updating cache for %s", proxyUID)
-			dialer, err := proxy.Dialer()
-			if err != nil {
-				return err
-			}
-
-			rconn, err := dialer.Dial(proxyTo)
-			if err != nil {
-				log.Printf("[i] %s did not respond to ping; is the target offline?", proxyTo)
-				proxy.cacheOnlineStatus = false
-				proxy.cacheTime = time.Now()
-				proxy.cacheResponse = status.ClientBoundResponse{}
-
-				return proxy.handleStatusRequest(conn, false)
-			}
-
-			if proxy.RealIP() {
-				hs.UpgradeToRealIP(connRemoteAddr, time.Now())
-				handshakePacket = hs.Marshal()
-			}
-
-			if proxy.ProxyProtocol() {
-				header := &proxyproto.Header{
-					Version:           2,
-					Command:           proxyproto.PROXY,
-					TransportProtocol: proxyproto.TCPv4,
-					SourceAddr:        connRemoteAddr,
-					DestinationAddr:   rconn.RemoteAddr(),
-				}
-
-				if _, err = header.WriteTo(rconn); err != nil {
-					return err
-				}
-			}
-
-			_, portString, _ := net.SplitHostPort(proxyTo)
-			port, err := strconv.ParseInt(portString, 10, 16)
-
-			err = rconn.WritePacket(handshaking.ServerBoundHandshake{
-				ProtocolVersion: hs.ProtocolVersion,
-				ServerAddress:   protocol.String(proxy.DomainName()),
-				ServerPort:      protocol.UnsignedShort(port),
-				NextState:       1,
-			}.Marshal())
-			if err != nil {
-				return err
-			}
-
-			err = rconn.WritePacket(statusRequest)
-			if err != nil {
-				return err
-			}
-
-			clientboundResponsePacket, err := rconn.ReadPacket()
-			if err != nil {
-				return err
-			}
-			clientboundResponse, err := status.UnmarshalClientBoundResponse(clientboundResponsePacket)
-			if err != nil {
-				return err
-			}
-
-			proxy.cacheOnlineStatus = true
-			proxy.cacheTime = time.Now()
-			proxy.cacheResponse = clientboundResponse
-
-			rconn.Close()
-		}
-
-		if !proxy.cacheOnlineStatus {
-			if Config.Debug {
-				log.Printf("[i] Sent %s cached offline response for %s", connRemoteAddr, proxyUID)
-			}
-			return proxy.handleStatusRequest(conn, false)
-		}
-
-		var JSONResponse status.ResponseJSON
-		err = json.Unmarshal([]byte(proxy.cacheResponse.JSONResponse), &JSONResponse)
-		if err != nil {
-			return err
-		}
-
-		responseJSON, err := json.Marshal(status.ResponseJSON{
-			Version: status.VersionJSON{
-				Name:     JSONResponse.Version.Name,
-				Protocol: int(hs.ProtocolVersion),
-			},
-			Players:     JSONResponse.Players,
-			Description: JSONResponse.Description,
-			Favicon:     JSONResponse.Favicon,
-		})
-		if err != nil {
-			return err
-		}
-		err = conn.WritePacket(status.ClientBoundResponse{
-			JSONResponse: protocol.String(responseJSON),
-		}.Marshal())
-		if err != nil {
-			return err
-		}
-
-		pingPacket, err := conn.ReadPacket()
-		if err != nil {
-			return err
-		}
-
-		ping, err := status.UnmarshalServerBoundPing(pingPacket)
-		if err != nil {
-			return err
-		}
-
-		err = conn.WritePacket(status.ClientBoundPong{
-			Payload: ping.Payload,
-		}.Marshal())
-		if err != nil {
-			return err
-		}
-
-		if Config.Debug {
-			log.Printf("[i] Sent %s cached response for %s", connRemoteAddr, proxyUID)
-		}
-		return nil
-	}
 
 	dialer, err := proxy.Dialer()
 	if err != nil {
@@ -313,7 +172,7 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 			Version:           2,
 			Command:           proxyproto.PROXY,
 			TransportProtocol: proxyproto.TCPv4,
-			SourceAddr:        connRemoteAddr,
+			SourceAddr:        session.connRemoteAddr,
 			DestinationAddr:   rconn.RemoteAddr(),
 		}
 
@@ -324,30 +183,173 @@ func (proxy *Proxy) handleConn(conn Conn, connRemoteAddr net.Addr, handshakePack
 
 	if proxy.RealIP() {
 		log.Println("realip")
-		hs.UpgradeToRealIP(connRemoteAddr, time.Now())
-		handshakePacket = hs.Marshal()
+		hs.UpgradeToRealIP(session.connRemoteAddr, time.Now())
+		session.handshakePacket = hs.Marshal()
 	}
 
-	if err := rconn.WritePacket(handshakePacket); err != nil {
+	if err := rconn.WritePacket(session.handshakePacket); err != nil {
 		return err
 	}
 
-	ls, err := login.UnmarshalServerBoundLoginStart(loginPacket)
+	err = rconn.WritePacket(session.loginPacket)
 	if err != nil {
 		return err
 	}
-	username := string(ls.Name)
-	err = rconn.WritePacket(loginPacket)
-	if err != nil {
-		return err
-	}
-	log.Printf("[i] %s with username %s connects through %s", connRemoteAddr, username, proxy.UID())
-	proxy.addPlayer(conn, username)
+	log.Printf("[i] %s with username %s connects through %s", session.connRemoteAddr, session.username, proxy.UID())
+	proxy.addPlayer(conn, session.username)
 	playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
 	defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
 
 	go pipe(rconn, conn)
 	pipe(conn, rconn)
+	return nil
+}
+
+func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
+	proxyTo := proxy.ProxyTo()
+	proxyUID := proxy.UID()
+
+	hs, err := handshaking.UnmarshalServerBoundHandshake(session.handshakePacket)
+	if err != nil {
+		return err
+	}
+
+	statusRequest, err := conn.ReadPacket()
+	if err != nil {
+		return err
+	}
+
+	_, err = status.UnmarshalServerBoundRequest(statusRequest)
+	if err != nil {
+		return err
+	}
+
+	if proxy.IsOnlineStatusConfigured() {
+		return proxy.handleStatusRequest(conn, true)
+	}
+
+	if proxy.cacheTime.IsZero() || time.Now().Sub(proxy.cacheTime) > 30*time.Second {
+		log.Printf("[i] Updating cache for %s", proxyUID)
+		dialer, err := proxy.Dialer()
+		if err != nil {
+			return err
+		}
+
+		rconn, err := dialer.Dial(proxyTo)
+		if err != nil {
+			log.Printf("[i] %s did not respond to ping; is the target offline?", proxyTo)
+			proxy.cacheOnlineStatus = false
+			proxy.cacheTime = time.Now()
+			proxy.cacheResponse = status.ClientBoundResponse{}
+
+			return proxy.handleStatusRequest(conn, false)
+		}
+
+		if proxy.RealIP() {
+			hs.UpgradeToRealIP(session.connRemoteAddr, time.Now())
+			session.handshakePacket = hs.Marshal()
+		}
+
+		if proxy.ProxyProtocol() {
+			header := &proxyproto.Header{
+				Version:           2,
+				Command:           proxyproto.PROXY,
+				TransportProtocol: proxyproto.TCPv4,
+				SourceAddr:        session.connRemoteAddr,
+				DestinationAddr:   rconn.RemoteAddr(),
+			}
+
+			if _, err = header.WriteTo(rconn); err != nil {
+				return err
+			}
+		}
+
+		_, portString, _ := net.SplitHostPort(proxyTo)
+		port, err := strconv.ParseInt(portString, 10, 16)
+
+		err = rconn.WritePacket(handshaking.ServerBoundHandshake{
+			ProtocolVersion: hs.ProtocolVersion,
+			ServerAddress:   protocol.String(proxy.DomainName()),
+			ServerPort:      protocol.UnsignedShort(port),
+			NextState:       1,
+		}.Marshal())
+		if err != nil {
+			return err
+		}
+
+		err = rconn.WritePacket(statusRequest)
+		if err != nil {
+			return err
+		}
+
+		clientboundResponsePacket, err := rconn.ReadPacket()
+		if err != nil {
+			return err
+		}
+		clientboundResponse, err := status.UnmarshalClientBoundResponse(clientboundResponsePacket)
+		if err != nil {
+			return err
+		}
+
+		proxy.cacheOnlineStatus = true
+		proxy.cacheTime = time.Now()
+		proxy.cacheResponse = clientboundResponse
+
+		rconn.Close()
+	}
+
+	if !proxy.cacheOnlineStatus {
+		if Config.Debug {
+			log.Printf("[i] Sent %s cached offline response for %s", session.connRemoteAddr, proxyUID)
+		}
+		return proxy.handleStatusRequest(conn, false)
+	}
+
+	var JSONResponse status.ResponseJSON
+	err = json.Unmarshal([]byte(proxy.cacheResponse.JSONResponse), &JSONResponse)
+	if err != nil {
+		return err
+	}
+
+	responseJSON, err := json.Marshal(status.ResponseJSON{
+		Version: status.VersionJSON{
+			Name:     JSONResponse.Version.Name,
+			Protocol: int(hs.ProtocolVersion),
+		},
+		Players:     JSONResponse.Players,
+		Description: JSONResponse.Description,
+		Favicon:     JSONResponse.Favicon,
+	})
+	if err != nil {
+		return err
+	}
+	err = conn.WritePacket(status.ClientBoundResponse{
+		JSONResponse: protocol.String(responseJSON),
+	}.Marshal())
+	if err != nil {
+		return err
+	}
+
+	pingPacket, err := conn.ReadPacket()
+	if err != nil {
+		return err
+	}
+
+	ping, err := status.UnmarshalServerBoundPing(pingPacket)
+	if err != nil {
+		return err
+	}
+
+	err = conn.WritePacket(status.ClientBoundPong{
+		Payload: ping.Payload,
+	}.Marshal())
+	if err != nil {
+		return err
+	}
+
+	if Config.Debug {
+		log.Printf("[i] Sent %s cached response for %s", session.connRemoteAddr, proxyUID)
+	}
 	return nil
 }
 
