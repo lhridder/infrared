@@ -182,7 +182,6 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 	}
 
 	if proxy.RealIP() {
-		log.Println("realip")
 		hs.UpgradeToRealIP(session.connRemoteAddr, time.Now())
 		session.handshakePacket = hs.Marshal()
 	}
