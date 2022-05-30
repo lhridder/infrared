@@ -413,19 +413,20 @@ func WatchProxyConfigFolder(path string, out chan *ProxyConfig) error {
 	}
 }
 
-func LoadGlobalConfig() {
+func LoadGlobalConfig() error {
 	jsonFile, err := os.Open("config.json")
 	if err != nil {
-		panic(err)
+		return err
 	}
 	var config = DefaultConfig
 	jsonParser := json.NewDecoder(jsonFile)
 	err = jsonParser.Decode(&config)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	Config = config
 	_ = jsonFile.Close()
+	return nil
 }
 
 func DefaultStatusResponse() protocol.Packet {

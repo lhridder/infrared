@@ -66,7 +66,11 @@ func init() {
 
 func main() {
 	log.Println("Loading global config")
-	infrared.LoadGlobalConfig()
+	err := infrared.LoadGlobalConfig()
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
 	log.Println("Loading proxy configs")
 
@@ -112,9 +116,13 @@ func main() {
 
 	if infrared.Config.GeoIPenabled {
 		log.Println("Loading GeoIPDB")
-		gateway.LoadDB()
+		err := gateway.LoadDB()
+		if err != nil {
+			log.Println(err)
+			return
+		}
 		log.Println("Loading Redis")
-		err := gateway.ConnectRedis()
+		err = gateway.ConnectRedis()
 		if err != nil {
 			log.Println(err)
 			return

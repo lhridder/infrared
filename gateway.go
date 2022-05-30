@@ -71,8 +71,10 @@ type Session struct {
 	connRemoteAddr  net.Addr
 }
 
-func (gateway *Gateway) LoadDB() {
-	gateway.db, _ = geoip2.Open(Config.GeoIPdatabasefile)
+func (gateway *Gateway) LoadDB() error {
+	err := error(nil)
+	gateway.db, err = geoip2.Open(Config.GeoIPdatabasefile)
+	return err
 }
 
 func (gateway *Gateway) LoadMojangAPI() {
