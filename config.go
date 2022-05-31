@@ -46,6 +46,7 @@ type GlobalConfig struct {
 	ApiBind                string   `json:"apiBind"`
 	GenericPingVersion     string   `json:"genericPingVersion"`
 	GenericPingDescription string   `json:"genericPingDescription"`
+	GenericPingIconPath    string   `json:"genericPingIconPath"`
 	GeoIPenabled           bool     `json:"geoIPenabled"`
 	GeoIPdatabasefile      string   `json:"geoIPdatabasefile"`
 	GeoIPCountryWhitelist  []string `json:"geoIPcountryWhitelist"`
@@ -67,6 +68,7 @@ var DefaultConfig = GlobalConfig{
 	ApiBind:                ":5000",
 	GenericPingVersion:     "Infrared",
 	GenericPingDescription: "There is no proxy associated with this domain. Please check your configuration.",
+	GenericPingIconPath:    "",
 	GeoIPenabled:           false,
 	GeoIPdatabasefile:      "",
 	GeoIPCountryWhitelist:  []string{},
@@ -441,6 +443,14 @@ func DefaultStatusResponse() protocol.Packet {
 		},
 		Description: json.RawMessage(fmt.Sprintf("{\"text\":\"%s\"}", Config.GenericPingDescription)),
 	}
+
+	if Config.GenericPingIconPath != "" {
+		img64, err := loadImageAndEncodeToBase64String(Config.GenericPingIconPath)
+		if err == nil {
+			responseJSON.Favicon = fmt.Sprintf("data:image/png;base64,%s", img64)
+		}
+	}
+
 	bb, _ := json.Marshal(responseJSON)
 
 	return status.ClientBoundResponse{

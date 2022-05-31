@@ -37,6 +37,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
   "apiBind": ":5000",
   "genericPingVersion": "Infrared",
   "genericPingDescription": "There is no proxy associated with this domain. Please check your configuration.",
+  "genericPingIconPath": "",
   "geoIPenabled": false,
   "geoIPdatabasefile": "",
   "geoIPcountryWhitelist": ["DE"],
@@ -55,7 +56,9 @@ Values can be left out if they don't deviate from the default, a config.json wit
 - `prometheusBind` on what port/address to have the prometheus exporter listen on.
 - `apiEnabled` if the json http api should be enabled.
 - `apiBind` on what port/address to have the api listen on.
-- `genericPingVersion` what response should be sent if a connecting player supplies an unknown domain.
+- `genericPingVersion` what version should be sent with for an unknown domain status request.
+- `genericPingDescription` what description should be sent with for an unknown domain status request.
+- `genericPingIconPath` what icon should be sent with for an unknown domain status request.
 - `geoIPenabled` if geoip checks should be enabled.
 - `geoIPdatabasefile` where the .mmdb file is located for geoip checks.
 - `geoIpcountryWhitelist` what countries should be whitelisted when doing geoip checks (2 letter notation).
