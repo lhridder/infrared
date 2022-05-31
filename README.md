@@ -38,6 +38,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
   "genericPingVersion": "Infrared",
   "genericPingDescription": "There is no proxy associated with this domain. Please check your configuration.",
   "genericPingIconPath": "",
+  "genericJoinResponse": "There is no proxy associated with this domain. Please check your configuration.",
   "geoIPenabled": false,
   "geoIPdatabasefile": "",
   "geoIPcountryWhitelist": ["DE"],
@@ -59,6 +60,7 @@ Values can be left out if they don't deviate from the default, a config.json wit
 - `genericPingVersion` what version should be sent with for an unknown domain status request.
 - `genericPingDescription` what description should be sent with for an unknown domain status request.
 - `genericPingIconPath` what icon should be sent with for an unknown domain status request.
+- `genericJoinResponse` what text response should be sent for an unknown domain join request.
 - `geoIPenabled` if geoip checks should be enabled.
 - `geoIPdatabasefile` where the .mmdb file is located for geoip checks.
 - `geoIpcountryWhitelist` what countries should be whitelisted when doing geoip checks (2 letter notation).

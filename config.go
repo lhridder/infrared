@@ -47,6 +47,7 @@ type GlobalConfig struct {
 	GenericPingVersion     string   `json:"genericPingVersion"`
 	GenericPingDescription string   `json:"genericPingDescription"`
 	GenericPingIconPath    string   `json:"genericPingIconPath"`
+	GenericJoinResponse    string   `json:"genericJoinResponse"`
 	GeoIPenabled           bool     `json:"geoIPenabled"`
 	GeoIPdatabasefile      string   `json:"geoIPdatabasefile"`
 	GeoIPCountryWhitelist  []string `json:"geoIPcountryWhitelist"`
@@ -69,6 +70,7 @@ var DefaultConfig = GlobalConfig{
 	GenericPingVersion:     "Infrared",
 	GenericPingDescription: "There is no proxy associated with this domain. Please check your configuration.",
 	GenericPingIconPath:    "",
+	GenericJoinResponse:    "There is no proxy associated with this domain. Please check your configuration.",
 	GeoIPenabled:           false,
 	GeoIPdatabasefile:      "",
 	GeoIPCountryWhitelist:  []string{},

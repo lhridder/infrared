@@ -439,7 +439,7 @@ func (gateway *Gateway) handleUnknown(conn Conn, session Session, isLogin bool) 
 
 	// Client send an invalid address/port; we don't have a v for that address
 	err := conn.WritePacket(login.ClientBoundDisconnect{
-		Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "There is no proxy associated with this domain. Please check your configuration.")),
+		Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.GenericJoinResponse)),
 	}.Marshal())
 	if err != nil {
 		log.Println(err)
