@@ -46,6 +46,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
   "redisHost": "localhost",
   "redisDB": 0,
   "redisPass": "",
+  "rejoinMessage": "Please rejoin to verify your connection.",
   "underAttack": false,
   "debug": false,
   "connectionTreshold": 50
@@ -68,6 +69,7 @@ Values can be left out if they don't deviate from the default, a config.json wit
 - `redisHost` what redis server to connect to when caching geoip and username lookups.
 - `redisDB` what redis db should be used on the redis server.
 - `redisPass` what password should be used when logging into the redis server.
+- `rejoinMessage` what text response should be sent when a player needs to rejoin to verify they're not a bot.
 - `underAttack` if the instance should permanently be in attack mode.
 - `debug` if debug logs should be enabled.
 - `connectionTreshold` at what amount of packets per second the underAttack mode should trigger.`

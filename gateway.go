@@ -474,7 +474,7 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 					handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": session.serverAddress, "country": session.country}).Inc()
 
 					err = conn.WritePacket(login.ClientBoundDisconnect{
-						Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "Please rejoin to verify your connection.")),
+						Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
 					}.Marshal())
 					if err != nil {
 						return err
@@ -677,7 +677,7 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 		log.Printf("[i] %s finished encryption check with uuid %s", p.Name, playerUUID)
 
 		err = conn.WritePacket(play.ClientBoundDisconnect{
-			Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", "Please rejoin to verify your connection.")),
+			Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
 		}.Marshal())
 		if err != nil {
 			return err

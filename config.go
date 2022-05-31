@@ -55,6 +55,7 @@ type GlobalConfig struct {
 	RedisHost              string   `json:"redisHost"`
 	RedisDB                int      `json:"redisDB"`
 	RedisPass              string   `json:"redisPass"`
+	RejoinMessage          string   `json:"rejoinMessage"`
 	UnderAttack            bool     `json:"underAttack"`
 	Debug                  bool     `json:"debug"`
 	ConnectionTreshold     int      `json:"connectionTreshold"`
@@ -78,6 +79,7 @@ var DefaultConfig = GlobalConfig{
 	RedisHost:              "localhost",
 	RedisDB:                0,
 	RedisPass:              "",
+	RejoinMessage:          "Please rejoin to verify your connection.",
 	UnderAttack:            false,
 	Debug:                  false,
 	ConnectionTreshold:     50,
