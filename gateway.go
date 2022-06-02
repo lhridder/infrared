@@ -512,14 +512,22 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 		}
 		results := strings.Split(result, ",")
 		session.country = results[1]
-		if results[0] == "false" && gateway.underAttack {
-			err := conn.Close()
-			if err != nil {
-				return err
+		if gateway.underAttack {
+			if results[0] == "false" {
+				err := conn.Close()
+				if err != nil {
+					return err
+				}
+				handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": session.serverAddress, "country": session.country}).Inc()
+				gateway.rdb.TTL(ctx, "ip:"+session.ip).SetVal(time.Hour * 12)
+				return errors.New("blocked because ip " + session.country)
 			}
-			handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": session.serverAddress, "country": session.country}).Inc()
-			gateway.rdb.TTL(ctx, "ip:"+session.ip).SetVal(time.Hour * 12)
-			return errors.New("blocked because ip " + session.country)
+			if Config.MojangAPIenabled {
+				err := gateway.loginCheck(conn, session)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
