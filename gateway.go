@@ -18,7 +18,6 @@ import (
 	"github.com/haveachin/infrared/protocol/cfb8"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
-	"github.com/haveachin/infrared/protocol/play"
 	"github.com/haveachin/infrared/protocol/status"
 	"github.com/oschwald/geoip2-golang"
 	"github.com/pires/go-proxyproto"
@@ -674,17 +673,9 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 
 		conn.SetCipher(cfb8.NewEncrypter(block, decryptedSharedSecret), cfb8.NewDecrypter(block, decryptedSharedSecret))
 
-		err = conn.WritePacket(login.ClientBoundLoginSuccess{
-			Username: protocol.String(p.Name),
-			UUID:     protocol.UUID(playerUUID),
-		}.Marshal())
-		if err != nil {
-			return err
-		}
-
 		log.Printf("[i] %s finished encryption check with uuid %s", p.Name, playerUUID)
 
-		err = conn.WritePacket(play.ClientBoundDisconnect{
+		err = conn.WritePacket(login.ClientBoundDisconnect{
 			Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
 		}.Marshal())
 		if err != nil {
