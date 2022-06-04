@@ -181,7 +181,7 @@ scrape_configs:
   * **host:** listenTo domain as specified in the infrared configuration.
   * **instance:** what infrared instance the amount of players are connected to.
   * **job:** what job was specified in the prometheus configuration.
-* infrared_handshakes: counter of the number of handshake packets received per instande, type and target:
+* infrared_handshakes: counter of the number of handshake packets received per instance, type and target:
   * **Example response:** `infrared_handshakes{instance="vps1.example.com:9070",type="status",host="proxy.example.com",country="DE"} 5`
   * **instance:** what infrared instance handshakes were received on.
   * **type:** the type of handshake received; "status", "login", "cancelled_host", "cancelled_encryption", "cancelled_name", "cancelled", "cancelled_authentication" and "cancelled_invalid".
