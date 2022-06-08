@@ -73,6 +73,7 @@ type Session struct {
 	Timestamp       protocol.Long
 	PublicKey       protocol.ByteArray
 	Signature       protocol.ByteArray
+	ProtocolVersion protocol.VarInt
 }
 
 func (gateway *Gateway) LoadDB() error {
@@ -320,6 +321,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	if err != nil {
 		return err
 	}
+	session.ProtocolVersion = hs.ProtocolVersion
 
 	session.serverAddress = strings.ToLower(hs.ParseServerAddress())
 	if !govalidator.IsDNSName(session.serverAddress) && !govalidator.IsIP(session.serverAddress) {
@@ -367,7 +369,6 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 				session.Timestamp = loginStartNew.Timestamp
 				session.PublicKey = loginStartNew.PublicKey
 				session.Signature = loginStartNew.Signature
-				log.Println(session.Signature)
 			}
 			session.username = string(loginStartNew.Name)
 		}
@@ -615,35 +616,42 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 			return errors.New("invalid encryption response")
 		}
 
-		encryptionRes, encryptionResNew, err := login.UnmarshalServerBoundEncryptionResponse(encryptionResponse)
+		encryptionRes, encryptionResNew, err := login.UnmarshalServerBoundEncryptionResponse(encryptionResponse, session.ProtocolVersion)
 		if err != nil {
 			handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
-			return errors.New("invalid login response")
+			return errors.New("invalid encryptionResponse")
 		}
 
-		if reflect.ValueOf(encryptionResNew).IsZero() {
+		var decryptedSharedSecret []byte
+		if !reflect.ValueOf(encryptionResNew).IsZero() {
+			decryptedSharedSecret, err = gateway.privateKey.Decrypt(rand.Reader, encryptionResNew.SharedSecret, nil)
+			if err != nil {
+				handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
+				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
+				return errors.New("failed to decrypt shared secret")
+			}
+			//TODO check signature and salt
+		} else {
+			decryptedVerifyToken, err := gateway.privateKey.Decrypt(rand.Reader, encryptionRes.VerifyToken, nil)
+			if err != nil {
+				handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
+				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
+				return errors.New("failed to decrypt verify token")
+			}
 
-		}
+			if !bytes.Equal(decryptedVerifyToken, verifyToken) {
+				handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
+				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
+				return errors.New("invalid verify token")
+			}
 
-		decryptedVerifyToken, err := gateway.privateKey.Decrypt(rand.Reader, encryptionRes.VerifyToken, nil)
-		if err != nil {
-			handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
-			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
-			return errors.New("failed to decrypt verify token")
-		}
-
-		if !bytes.Equal(decryptedVerifyToken, verifyToken) {
-			handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
-			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
-			return errors.New("invalid verify token")
-		}
-
-		decryptedSharedSecret, err := gateway.privateKey.Decrypt(rand.Reader, encryptionRes.SharedSecret, nil)
-		if err != nil {
-			handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
-			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
-			return errors.New("failed to decrypt shared secret")
+			decryptedSharedSecret, err = gateway.privateKey.Decrypt(rand.Reader, encryptionRes.SharedSecret, nil)
+			if err != nil {
+				handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
+				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
+				return errors.New("failed to decrypt shared secret")
+			}
 		}
 
 		block, err := aes.NewCipher(decryptedSharedSecret)
