@@ -7,7 +7,7 @@
 fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 
 ## TODO
-- Make encryption check 1.19 compliant
+- Make encryption check use 1.19 signatures
 
 ## Added/changed Features
 
