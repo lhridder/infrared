@@ -12,11 +12,9 @@ type ServerBoundEncryptionResponse struct {
 }
 
 type ServerBoundEncryptionResponseNew struct {
-	SharedSecret   protocol.ByteArray
-	UseVerifyToken protocol.Boolean
-	VerifyToken    protocol.ByteArray
-	Salt           protocol.Long
-	Signature      protocol.ByteArray
+	SharedSecret protocol.ByteArray
+	Salt         protocol.Long
+	Signature    protocol.ByteArray
 }
 
 func (pk ServerBoundEncryptionResponse) Marshal() protocol.Packet {
@@ -27,7 +25,7 @@ func (pk ServerBoundEncryptionResponse) Marshal() protocol.Packet {
 	)
 }
 
-func UnmarshalServerBoundEncryptionResponse(packet protocol.Packet) (ServerBoundEncryptionResponse, ServerBoundEncryptionResponseNew, error) {
+func UnmarshalServerBoundEncryptionResponse(packet protocol.Packet, protocolVersion protocol.VarInt) (ServerBoundEncryptionResponse, ServerBoundEncryptionResponseNew, error) {
 	var pk ServerBoundEncryptionResponse
 	var pknew ServerBoundEncryptionResponseNew
 
@@ -35,22 +33,23 @@ func UnmarshalServerBoundEncryptionResponse(packet protocol.Packet) (ServerBound
 		return pk, pknew, protocol.ErrInvalidPacketID
 	}
 
-	err := packet.Scan(
-		&pk.SharedSecret,
-		&pk.VerifyToken,
-	)
-	if err != nil {
-		err = packet.Scan(
+	if protocolVersion >= 759 {
+		err := packet.Scan(
 			&pknew.SharedSecret,
-			&pknew.UseVerifyToken,
-			&pknew.VerifyToken,
 			&pknew.Salt,
 			&pknew.Signature,
 		)
 		if err != nil {
 			return pk, pknew, err
 		}
-		return pk, pknew, nil
+	} else {
+		err := packet.Scan(
+			&pk.SharedSecret,
+			&pk.VerifyToken,
+		)
+		if err != nil {
+			return pk, pknew, err
+		}
 	}
 
 	return pk, pknew, nil
