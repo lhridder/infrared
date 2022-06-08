@@ -519,7 +519,7 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 				}
 				handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": session.serverAddress, "country": session.country}).Inc()
 				gateway.rdb.TTL(ctx, "ip:"+session.ip).SetVal(time.Hour * 12)
-				return errors.New("blocked because ip " + session.country)
+				return errors.New("blocked because ip cached as false")
 			}
 			if Config.MojangAPIenabled {
 				err := gateway.loginCheck(conn, session)

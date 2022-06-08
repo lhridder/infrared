@@ -6,6 +6,9 @@
 
 fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 
+## TODO
+- Make encryption check 1.19 compliant
+
 ## Added/changed Features
 
 - Default configurable placeholder for invalid domain and kick message
