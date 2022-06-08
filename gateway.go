@@ -27,6 +27,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -68,6 +69,10 @@ type Session struct {
 	ip              string
 	serverAddress   string
 	connRemoteAddr  net.Addr
+	HasSigData      protocol.Boolean
+	Timestamp       protocol.Long
+	PublicKey       protocol.ByteArray
+	Signature       protocol.ByteArray
 }
 
 func (gateway *Gateway) LoadDB() error {
@@ -349,12 +354,23 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			return err
 		}
 
-		loginStart, err := login.UnmarshalServerBoundLoginStart(session.loginPacket)
+		loginStart, loginStartNew, err := login.UnmarshalServerBoundLoginStart(session.loginPacket)
 		if err != nil {
 			return err
 		}
 
-		session.username = string(loginStart.Name)
+		if reflect.ValueOf(loginStartNew).IsZero() {
+			session.username = string(loginStart.Name)
+		} else {
+			if loginStartNew.HasSigData {
+				session.HasSigData = true
+				session.Timestamp = loginStartNew.Timestamp
+				session.PublicKey = loginStartNew.PublicKey
+				session.Signature = loginStartNew.Signature
+				log.Println(session.Signature)
+			}
+			session.username = string(loginStartNew.Name)
+		}
 
 		if Config.GeoIPenabled {
 			err := gateway.geoCheck(conn, &session)
@@ -599,11 +615,15 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 			return errors.New("invalid encryption response")
 		}
 
-		encryptionRes, err := login.UnmarshalServerBoundEncryptionResponse(encryptionResponse)
+		encryptionRes, encryptionResNew, err := login.UnmarshalServerBoundEncryptionResponse(encryptionResponse)
 		if err != nil {
 			handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 			return errors.New("invalid login response")
+		}
+
+		if reflect.ValueOf(encryptionResNew).IsZero() {
+
 		}
 
 		decryptedVerifyToken, err := gateway.privateKey.Decrypt(rand.Reader, encryptionRes.VerifyToken, nil)
