@@ -163,7 +163,7 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 	rconn, err := dialer.Dial(proxyTo)
 	if err != nil {
 		log.Printf("[i] %s did not respond to ping; is the target offline?", proxyTo)
-		return proxy.handleLoginRequest(conn)
+		return proxy.handleLoginRequest(conn, session)
 	}
 	defer rconn.Close()
 
@@ -370,20 +370,10 @@ func pipe(src, dst Conn) {
 	}
 }
 
-func (proxy *Proxy) handleLoginRequest(conn Conn) error {
-	packet, err := conn.ReadPacket()
-	if err != nil {
-		return err
-	}
-
-	loginStart, err := login.UnmarshalServerBoundLoginStart(packet)
-	if err != nil {
-		return err
-	}
-
+func (proxy *Proxy) handleLoginRequest(conn Conn, session Session) error {
 	message := proxy.DisconnectMessage()
 	templates := map[string]string{
-		"username":      string(loginStart.Name),
+		"username":      session.username,
 		"now":           time.Now().Format(time.RFC822),
 		"remoteAddress": conn.LocalAddr().String(),
 		"localAddress":  conn.LocalAddr().String(),
