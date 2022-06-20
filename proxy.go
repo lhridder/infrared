@@ -36,7 +36,8 @@ type Proxy struct {
 	players           map[Conn]string
 	mu                sync.Mutex
 
-	cacheTime         time.Time
+	cacheOnlineTime   time.Time
+	cacheStatusTime   time.Time
 	cacheResponse     status.ClientBoundResponse
 	cacheOnlineStatus bool
 }
@@ -160,11 +161,18 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 		return err
 	}
 
+	if !proxy.cacheOnlineStatus && time.Now().Sub(proxy.cacheOnlineTime) < 10*time.Second {
+		return proxy.handleLoginRequest(conn, session)
+	}
+
 	rconn, err := dialer.Dial(proxyTo)
 	if err != nil {
 		log.Printf("[i] %s did not respond to ping; is the target offline?", proxyTo)
+		proxy.cacheOnlineStatus = false
+		proxy.cacheOnlineTime = time.Now()
 		return proxy.handleLoginRequest(conn, session)
 	}
+	proxy.cacheOnlineStatus = true
 	defer rconn.Close()
 
 	if proxy.ProxyProtocol() {
@@ -227,7 +235,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		return proxy.handleStatusRequest(conn, true)
 	}
 
-	if proxy.cacheTime.IsZero() || time.Now().Sub(proxy.cacheTime) > 30*time.Second {
+	if proxy.cacheStatusTime.IsZero() || time.Now().Sub(proxy.cacheStatusTime) > 10*time.Second {
 		log.Printf("[i] Updating cache for %s", proxyUID)
 		dialer, err := proxy.Dialer()
 		if err != nil {
@@ -238,7 +246,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		if err != nil {
 			log.Printf("[i] %s did not respond to ping; is the target offline?", proxyTo)
 			proxy.cacheOnlineStatus = false
-			proxy.cacheTime = time.Now()
+			proxy.cacheStatusTime = time.Now()
 			proxy.cacheResponse = status.ClientBoundResponse{}
 
 			return proxy.handleStatusRequest(conn, false)
@@ -291,7 +299,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		}
 
 		proxy.cacheOnlineStatus = true
-		proxy.cacheTime = time.Now()
+		proxy.cacheStatusTime = time.Now()
 		proxy.cacheResponse = clientboundResponse
 
 		rconn.Close()
