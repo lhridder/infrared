@@ -380,7 +380,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			}
 
 			if Config.MojangAPIenabled && !gateway.underAttack {
-				err := gateway.usernameCheck(conn, &session)
+				err := gateway.usernameCheck(&session)
 				if err != nil {
 					return err
 				}
@@ -549,7 +549,7 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 	return nil
 }
 
-func (gateway *Gateway) usernameCheck(conn Conn, session *Session) error {
+func (gateway *Gateway) usernameCheck(session *Session) error {
 	//TODO retire
 	_, err := gateway.rdb.Get(ctx, "username:"+session.username).Result()
 	if err == redis.Nil {
