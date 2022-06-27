@@ -231,6 +231,8 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		return err
 	}
 
+	_ = conn.SetDeadline(time.Time{})
+
 	if proxy.IsOnlineStatusConfigured() {
 		return proxy.handleStatusRequest(conn, true)
 	}
