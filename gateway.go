@@ -268,7 +268,19 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 			_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 			if err := gateway.serve(conn, addr); err != nil {
 				if errors.Is(err, protocol.ErrInvalidPacketID) || errors.Is(err, protocol.ErrInvalidPacketLength) {
-					handshakeCount.With(prometheus.Labels{"type": "cancelled_invalid", "host": "", "country": ""}).Inc()
+					if Config.GeoIPenabled {
+						ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+
+						record, err := gateway.db.Country(net.ParseIP(ip))
+						if err != nil {
+							log.Printf("[i] failed to lookup country for %s", conn.RemoteAddr())
+						}
+						handshakeCount.With(prometheus.Labels{"type": "cancelled_invalid", "host": "", "country": record.Country.IsoCode}).Inc()
+
+						err = gateway.rdb.Set(ctx, "ip:"+ip, "false,"+record.Country.IsoCode, time.Hour*12).Err()
+					} else {
+						handshakeCount.With(prometheus.Labels{"type": "cancelled_invalid", "host": "", "country": ""}).Inc()
+					}
 				}
 
 				if Config.Debug {
