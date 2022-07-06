@@ -57,7 +57,7 @@ func ReadPacketBytes(r DecodeReader) ([]byte, error) {
 		return nil, err
 	}
 
-	if packetLength < 1 || packetLength > 1000 {
+	if packetLength < 1 || packetLength > 16384 {
 		return nil, ErrInvalidPacketLength
 	}
 
