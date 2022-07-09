@@ -33,7 +33,6 @@ type Proxy struct {
 	Config *ProxyConfig
 
 	cancelTimeoutFunc func()
-	players           map[Conn]string
 	mu                sync.Mutex
 
 	cacheOnlineTime   time.Time
@@ -127,26 +126,6 @@ func (proxy *Proxy) UIDs() []string {
 	return uids
 }
 
-func (proxy *Proxy) addPlayer(conn Conn, username string) {
-	proxy.mu.Lock()
-	defer proxy.mu.Unlock()
-	if proxy.players == nil {
-		proxy.players = map[Conn]string{}
-	}
-	proxy.players[conn] = username
-}
-
-func (proxy *Proxy) removePlayer(conn Conn) int {
-	proxy.mu.Lock()
-	defer proxy.mu.Unlock()
-	if proxy.players == nil {
-		proxy.players = map[Conn]string{}
-		return 0
-	}
-	delete(proxy.players, conn)
-	return len(proxy.players)
-}
-
 func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 	hs, err := handshaking.UnmarshalServerBoundHandshake(session.handshakePacket)
 	if err != nil {
@@ -203,7 +182,6 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 		return err
 	}
 	log.Printf("[i] %s with username %s connects through %s", session.connRemoteAddr, session.username, proxy.UID())
-	proxy.addPlayer(conn, session.username)
 	playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
 	defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
 
