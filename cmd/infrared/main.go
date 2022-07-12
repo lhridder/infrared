@@ -10,19 +10,16 @@ import (
 )
 
 const (
-	envPrefix               = "INFRARED_"
-	envConfigPath           = envPrefix + "CONFIG_PATH"
-	envReceiveProxyProtocol = envPrefix + "RECEIVE_PROXY_PROTOCOL"
+	envPrefix     = "INFRARED_"
+	envConfigPath = envPrefix + "CONFIG_PATH"
 )
 
 const (
-	clfConfigPath           = "config-path"
-	clfReceiveProxyProtocol = "receive-proxy-protocol"
+	clfConfigPath = "config-path"
 )
 
 var (
-	configPath           = "./configs"
-	receiveProxyProtocol = false
+	configPath = "./configs"
 )
 
 func envBool(name string, value bool) bool {
@@ -50,12 +47,10 @@ func envString(name string, value string) string {
 
 func initEnv() {
 	configPath = envString(envConfigPath, configPath)
-	receiveProxyProtocol = envBool(envReceiveProxyProtocol, receiveProxyProtocol)
 }
 
 func initFlags() {
 	flag.StringVar(&configPath, clfConfigPath, configPath, "path of all proxy configs")
-	flag.BoolVar(&receiveProxyProtocol, clfReceiveProxyProtocol, receiveProxyProtocol, "should accept proxy protocol")
 	flag.Parse()
 }
 
@@ -95,7 +90,7 @@ func main() {
 		}
 	}()
 
-	gateway := infrared.Gateway{ReceiveProxyProtocol: receiveProxyProtocol}
+	gateway := infrared.Gateway{ReceiveProxyProtocol: infrared.Config.ReceiveProxyProtocol}
 	go func() {
 		for {
 			cfg, ok := <-outCfgs

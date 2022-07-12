@@ -24,16 +24,15 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 
 `-config-path` specifies the path to all your server configs [default: `"./configs/"`]
 
-`-receive-proxy-protocol` if Infrared should be able to receive proxy protocol [default: `false`]
-
 ### Example Usage
 
-`./infrared -config-path="." -receive-proxy-protocol=true`
+`./infrared -config-path="."`
 
 ## Global config.json
 ### Example/Default
 ```json
 {
+  "receiveProxyProtocol": false,
   "prometheusEnabled": false,
   "prometheusBind": ":9100",
   "apiEnabled": false,
@@ -57,6 +56,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 ```
 Values can be left out if they don't deviate from the default, a config.json with just `{}` is still required for startup.
 ### Fields
+- `receiveProxyProtocol` whether to allow for inbound proxyProtocol connections.
 - `prometheusEnabled` whether to enable to builtin prometheus exporter or not.
 - `prometheusBind` on what port/address to have the prometheus exporter listen on.
 - `apiEnabled` if the json http api should be enabled.

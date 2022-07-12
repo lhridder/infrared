@@ -40,6 +40,7 @@ type ProxyConfig struct {
 }
 
 type GlobalConfig struct {
+	ReceiveProxyProtocol   bool     `json:"receiveProxyProtocol"`
 	PrometheusEnabled      bool     `json:"prometheusEnabled"`
 	PrometheusBind         string   `json:"prometheusBind"`
 	ApiEnabled             bool     `json:"apiEnabled"`
@@ -64,6 +65,7 @@ type GlobalConfig struct {
 var Config GlobalConfig
 
 var DefaultConfig = GlobalConfig{
+	ReceiveProxyProtocol:   false,
 	PrometheusEnabled:      false,
 	PrometheusBind:         ":9100",
 	ApiEnabled:             false,
