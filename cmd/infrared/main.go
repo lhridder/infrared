@@ -6,7 +6,6 @@ import (
 	"github.com/haveachin/infrared/api"
 	"log"
 	"os"
-	"strconv"
 )
 
 const (
@@ -21,20 +20,6 @@ const (
 var (
 	configPath = "./configs"
 )
-
-func envBool(name string, value bool) bool {
-	envString := os.Getenv(name)
-	if envString == "" {
-		return value
-	}
-
-	envBool, err := strconv.ParseBool(envString)
-	if err != nil {
-		return value
-	}
-
-	return envBool
-}
 
 func envString(name string, value string) string {
 	envString := os.Getenv(name)
