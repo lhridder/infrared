@@ -19,6 +19,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 - Global .json config
 - Removed docker and callback features
 - Status packet caching
+- Bandwith usage tracking for proxy configs through prometheus
 
 ## Command-Line Flags
 
@@ -51,7 +52,8 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
   "rejoinMessage": "Please rejoin to verify your connection.",
   "underAttack": false,
   "debug": false,
-  "connectionTreshold": 50
+  "connectionTreshold": 50,
+  "trackBandwith": false
 }
 ```
 Values can be left out if they don't deviate from the default, a config.json with just `{}` is still required for startup.
@@ -75,7 +77,8 @@ Values can be left out if they don't deviate from the default, a config.json wit
 - `rejoinMessage` what text response should be sent when a player needs to rejoin to verify they're not a bot.
 - `underAttack` if the instance should permanently be in attack mode.
 - `debug` if debug logs should be enabled.
-- `connectionTreshold` at what amount of packets per second the underAttack mode should trigger.`
+- `connectionTreshold` at what amount of packets per second the underAttack mode should trigger.
+- `trackBandwith` whether or not bandwith usage should be tracked in prometheus (requires prometheusEnabled).
 
 
 ## Proxy Config

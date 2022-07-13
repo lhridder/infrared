@@ -123,6 +123,14 @@ func main() {
 			log.Println(err)
 			return
 		}
+
+		if infrared.Config.TrackBandwith {
+			go func() {
+				for {
+					gateway.TrackBandwith()
+				}
+			}()
+		}
 	}
 
 	if !infrared.Config.UnderAttack {

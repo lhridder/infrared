@@ -60,6 +60,7 @@ type GlobalConfig struct {
 	UnderAttack            bool     `json:"underAttack"`
 	Debug                  bool     `json:"debug"`
 	ConnectionTreshold     int      `json:"connectionTreshold"`
+	TrackBandwith          bool     `json:"trackBandwith"`
 }
 
 var Config GlobalConfig
@@ -85,6 +86,7 @@ var DefaultConfig = GlobalConfig{
 	UnderAttack:            false,
 	Debug:                  false,
 	ConnectionTreshold:     50,
+	TrackBandwith:          false,
 }
 
 func (cfg *ProxyConfig) Dialer() (*Dialer, error) {

@@ -43,6 +43,10 @@ var (
 		Name: "infrared_underAttack",
 		Help: "Is the proxy under attack",
 	})
+	usedBandwith = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "infrared_used_bandwith",
+		Help: "The total number of used bytes of bandwith per proxy",
+	}, []string{"host"})
 	ctx = context.Background()
 )
 
@@ -222,6 +226,10 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 	}
 
 	playersConnected.WithLabelValues(proxy.DomainName())
+
+	if Config.TrackBandwith {
+		usedBandwith.WithLabelValues(proxy.DomainName())
+	}
 
 	// Check if a gate is already listening to the Proxy address
 	addr := proxy.ListenTo()
@@ -752,6 +760,19 @@ func (gateway *Gateway) ClearCps() {
 	}
 	gateway.connections = 0
 	time.Sleep(time.Second)
+}
+
+func (gateway *Gateway) TrackBandwith() {
+	gateway.Proxies.Range(func(k, v interface{}) bool {
+		proxy := v.(*Proxy)
+		name := proxy.DomainName()
+		proxy.mu.Lock()
+		usedBandwith.WithLabelValues(name).Add(float64(proxy.usedBandwith))
+		proxy.usedBandwith = 0
+		proxy.mu.Unlock()
+		return false
+	})
+	time.Sleep(5 * time.Second)
 }
 
 func contains(s []string, str string) bool {

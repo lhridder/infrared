@@ -39,6 +39,8 @@ type Proxy struct {
 	cacheStatusTime   time.Time
 	cacheResponse     status.ClientBoundResponse
 	cacheOnlineStatus bool
+
+	usedBandwith int
 }
 
 func (proxy *Proxy) DomainNames() []string {
@@ -185,8 +187,8 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 	playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
 	defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
 
-	go pipe(rconn, conn)
-	pipe(conn, rconn)
+	go pipe(rconn, conn, proxy)
+	pipe(conn, rconn, proxy)
 	return nil
 }
 
@@ -339,7 +341,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 	return nil
 }
 
-func pipe(src, dst Conn) {
+func pipe(src, dst Conn, proxy *Proxy) {
 	buffer := make([]byte, 0xffff)
 
 	for {
@@ -353,6 +355,12 @@ func pipe(src, dst Conn) {
 		_, err = dst.Write(data)
 		if err != nil {
 			return
+		}
+
+		if Config.TrackBandwith {
+			proxy.mu.Lock()
+			proxy.usedBandwith = proxy.usedBandwith + len(data)
+			proxy.mu.Unlock()
 		}
 	}
 }
