@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/go-redis/redis/v8"
+	"golang.org/x/net/context"
 	"io/ioutil"
 	"log"
 	"net"
@@ -61,6 +64,12 @@ type GlobalConfig struct {
 	Debug                  bool     `json:"debug"`
 	ConnectionTreshold     int      `json:"connectionTreshold"`
 	TrackBandwith          bool     `json:"trackBandwith"`
+	UseRedisConfig         bool     `json:"useRedisConfigs"`
+}
+
+type redisEvent struct {
+	Name   string          `json:"name"`
+	Config json.RawMessage `json:"config"`
 }
 
 var Config GlobalConfig
@@ -87,6 +96,7 @@ var DefaultConfig = GlobalConfig{
 	Debug:                  false,
 	ConnectionTreshold:     50,
 	TrackBandwith:          false,
+	UseRedisConfig:         false,
 }
 
 func (cfg *ProxyConfig) Dialer() (*Dialer, error) {
@@ -464,4 +474,83 @@ func DefaultStatusResponse() protocol.Packet {
 	return status.ClientBoundResponse{
 		JSONResponse: protocol.String(bb),
 	}.Marshal()
+}
+
+func LoadProxyConfigsFromRedis() ([]*ProxyConfig, error) {
+	var cfgs []*ProxyConfig
+
+	ctx := context.Background()
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     Config.RedisHost + ":6379",
+		Password: Config.RedisPass,
+		DB:       Config.RedisDB,
+	})
+	_, err := rdb.Ping(ctx).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	defer rdb.Close()
+
+	configList, err := rdb.Keys(ctx, "config:*").Result()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(configList) == 0 {
+		return nil, errors.New("no configs were found")
+	}
+
+	for _, element := range configList {
+		config, err := rdb.Get(ctx, element).Result()
+		if err != nil {
+			return nil, err
+		}
+
+		cfg := DefaultProxyConfig()
+
+		err = json.Unmarshal([]byte(config), &cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		cfgs = append(cfgs, &cfg)
+	}
+
+	return cfgs, nil
+}
+
+func WatchRedisConfigs(out chan *ProxyConfig) error {
+	ctx := context.Background()
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     Config.RedisHost + ":6379",
+		Password: Config.RedisPass,
+		DB:       Config.RedisDB,
+	})
+	_, err := rdb.Ping(ctx).Result()
+	if err != nil {
+		return err
+	}
+
+	defer rdb.Close()
+
+	subscriber := rdb.Subscribe(ctx, "infrared-add-config")
+	for {
+		msg, err := subscriber.ReceiveMessage(ctx)
+		if err != nil {
+			return err
+		}
+
+		var event redisEvent
+		if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+			return err
+		}
+
+		cfg := DefaultProxyConfig()
+		if err := json.Unmarshal(event.Config, &cfg); err != nil {
+			return err
+		}
+
+		out <- &cfg
+	}
 }

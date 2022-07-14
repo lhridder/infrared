@@ -20,6 +20,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 - Removed docker and callback features
 - Status packet caching
 - Bandwith usage tracking for proxy configs through prometheus
+- Use redis to get proxy configs ([lhridder/infrapi](https://github.com/lhridder/infrapi))
 
 ## Command-Line Flags
 
@@ -53,7 +54,8 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
   "underAttack": false,
   "debug": false,
   "connectionTreshold": 50,
-  "trackBandwith": false
+  "trackBandwith": false,
+  "useRedisConfigs": false
 }
 ```
 Values can be left out if they don't deviate from the default, a config.json with just `{}` is still required for startup.
@@ -79,7 +81,7 @@ Values can be left out if they don't deviate from the default, a config.json wit
 - `debug` if debug logs should be enabled.
 - `connectionTreshold` at what amount of packets per second the underAttack mode should trigger.
 - `trackBandwith` whether or not bandwith usage should be tracked in prometheus (requires prometheusEnabled).
-
+- `useRedisConfigs` whether or not to get the proxy configs from redis (this will disable the builtin api).
 
 ## Proxy Config
 

@@ -52,12 +52,35 @@ func main() {
 		return
 	}
 
-	log.Println("Loading proxy configs")
+	var cfgs []*infrared.ProxyConfig
+	outCfgs := make(chan *infrared.ProxyConfig)
 
-	cfgs, err := infrared.LoadProxyConfigsFromPath(configPath, false)
-	if err != nil {
-		log.Printf("Failed loading proxy configs from %s; error: %s", configPath, err)
-		return
+	if infrared.Config.UseRedisConfig {
+		log.Println("Loading proxy configs from redis")
+		cfgs, err = infrared.LoadProxyConfigsFromRedis()
+		if err != nil {
+			log.Printf("Failed loading proxy configs from redis; error: %s", err)
+			return
+		}
+		go func() {
+			if err := infrared.WatchRedisConfigs(outCfgs); err != nil {
+				log.Println("Failed watching redis configs; error:", err)
+			}
+		}()
+	} else {
+		log.Printf("Loading proxy configs from %s", configPath)
+		cfgs, err = infrared.LoadProxyConfigsFromPath(configPath, false)
+		if err != nil {
+			log.Printf("Failed loading proxy configs from %s; error: %s", configPath, err)
+			return
+		}
+
+		go func() {
+			if err := infrared.WatchProxyConfigFolder(configPath, outCfgs); err != nil {
+				log.Println("Failed watching config folder; error:", err)
+				log.Println("SYSTEM FAILURE: CONFIG WATCHER FAILED")
+			}
+		}()
 	}
 
 	var proxies []*infrared.Proxy
@@ -66,14 +89,6 @@ func main() {
 			Config: cfg,
 		})
 	}
-
-	outCfgs := make(chan *infrared.ProxyConfig)
-	go func() {
-		if err := infrared.WatchProxyConfigFolder(configPath, outCfgs); err != nil {
-			log.Println("Failed watching config folder; error:", err)
-			log.Println("SYSTEM FAILURE: CONFIG WATCHER FAILED")
-		}
-	}()
 
 	gateway := infrared.Gateway{ReceiveProxyProtocol: infrared.Config.ReceiveProxyProtocol}
 	go func() {
@@ -90,7 +105,7 @@ func main() {
 		}
 	}()
 
-	if infrared.Config.ApiEnabled {
+	if infrared.Config.ApiEnabled && !infrared.Config.UseRedisConfig {
 		go api.ListenAndServe(configPath, infrared.Config.ApiBind)
 	}
 
@@ -141,7 +156,7 @@ func main() {
 		}()
 	}
 
-	log.Println("Starting Infrared")
+	log.Println("Starting gateway listeners")
 	if err := gateway.ListenAndServe(proxies); err != nil {
 		log.Fatal("Gateway exited; error: ", err)
 	}
