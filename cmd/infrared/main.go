@@ -56,17 +56,19 @@ func main() {
 	outCfgs := make(chan *infrared.ProxyConfig)
 
 	if infrared.Config.UseRedisConfig {
+		log.Println("Start watching redis for configs")
+		go func() {
+			if err := infrared.WatchRedisConfigs(outCfgs); err != nil {
+				log.Println("Failed watching redis configs; error:", err)
+			}
+		}()
+
 		log.Println("Loading proxy configs from redis")
 		cfgs, err = infrared.LoadProxyConfigsFromRedis()
 		if err != nil {
 			log.Printf("Failed loading proxy configs from redis; error: %s", err)
 			return
 		}
-		go func() {
-			if err := infrared.WatchRedisConfigs(outCfgs); err != nil {
-				log.Println("Failed watching redis configs; error:", err)
-			}
-		}()
 	} else {
 		log.Printf("Loading proxy configs from %s", configPath)
 		cfgs, err = infrared.LoadProxyConfigsFromPath(configPath, false)

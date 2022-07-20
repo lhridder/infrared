@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,8 @@ type ProxyConfig struct {
 	removeCallback func()
 	changeCallback func()
 	dialer         *Dialer
+
+	Name string
 
 	DomainNames       []string     `json:"domainNames"`
 	ListenTo          string       `json:"listenTo"`
@@ -72,7 +75,10 @@ type redisEvent struct {
 	Config json.RawMessage `json:"config"`
 }
 
-var Config GlobalConfig
+var (
+	Config GlobalConfig
+	rdb    *redis.Client
+)
 
 var DefaultConfig = GlobalConfig{
 	ReceiveProxyProtocol:   false,
@@ -514,6 +520,9 @@ func LoadProxyConfigsFromRedis() ([]*ProxyConfig, error) {
 			return nil, err
 		}
 
+		cfg.Name = strings.Split(element, "config:")[1]
+		go cfg.watchRedis()
+
 		cfgs = append(cfgs, &cfg)
 	}
 
@@ -522,7 +531,7 @@ func LoadProxyConfigsFromRedis() ([]*ProxyConfig, error) {
 
 func WatchRedisConfigs(out chan *ProxyConfig) error {
 	ctx := context.Background()
-	rdb := redis.NewClient(&redis.Options{
+	rdb = redis.NewClient(&redis.Options{
 		Addr:     Config.RedisHost + ":6379",
 		Password: Config.RedisPass,
 		DB:       Config.RedisDB,
@@ -551,6 +560,26 @@ func WatchRedisConfigs(out chan *ProxyConfig) error {
 			return err
 		}
 
+		cfg.Name = event.Name
+
+		go cfg.watchRedis()
 		out <- &cfg
+	}
+}
+
+func (cfg *ProxyConfig) watchRedis() {
+	ctx := context.Background()
+
+	subscriber := rdb.Subscribe(ctx, "infrared-delete-config")
+	for {
+		msg, err := subscriber.ReceiveMessage(ctx)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		if msg.Payload == cfg.Name {
+			cfg.removeCallback()
+		}
 	}
 }
