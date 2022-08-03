@@ -24,6 +24,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -78,6 +79,13 @@ type Session struct {
 	PublicKey       protocol.ByteArray
 	Signature       protocol.ByteArray
 	ProtocolVersion protocol.VarInt
+	config          *ProxyConfig
+}
+
+type iprisk struct {
+	Datacenter   bool `json:"data_center"`
+	PublicProxy  bool `json:"public_proxy"`
+	TorExitRelay bool `json:"tor_exit_relay"`
 }
 
 func (gateway *Gateway) LoadDB() error {
@@ -369,6 +377,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 		}
 	}
 	proxy := v.(*Proxy)
+	session.config = proxy.Config
 
 	if hs.IsLoginRequest() {
 		session.loginPacket, err = conn.ReadPacket()
@@ -492,16 +501,59 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 		if err != nil {
 			log.Printf("[i] failed to lookup country for %s", session.connRemoteAddr)
 		}
-
 		session.country = record.Country.IsoCode
-		if gateway.underAttack {
-			if contains(Config.GeoIPCountryWhitelist, session.country) {
-				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "half,"+session.country, time.Hour*24).Err()
+
+		if Config.GeoIP.EnableIprisk {
+			var client http.Client
+
+			req, err := http.NewRequest(http.MethodGet, "https://beta.iprisk.info/v1/"+session.ip, nil)
+			if err != nil {
+				return errors.New("cannot format request to iprisk because of " + err.Error())
+			}
+			req.Header.Set("User-Agent", "github.com/lhridder/infrared")
+
+			res, err := client.Do(req)
+			if err != nil {
+				return errors.New("cannot query iprisk because of " + err.Error())
+			}
+
+			if res.StatusCode != 200 {
+				return errors.New("failed to query iprisk, error code: " + strconv.Itoa(res.StatusCode))
+			}
+
+			body, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				return errors.New("failed to read iprisk response: " + err.Error())
+			}
+
+			var iprisk iprisk
+			err = json.Unmarshal(body, &iprisk)
+			if err != nil {
+				return errors.New("failed to unmarshal iprisk response: " + err.Error())
+			}
+
+			if iprisk.TorExitRelay || iprisk.PublicProxy {
+				handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": session.serverAddress, "country": session.country}).Inc()
+
+				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 				if err != nil {
 					log.Println(err)
 				}
+				return errors.New("blocked because iprisk tor/proxy")
+			}
 
-				if Config.MojangAPIenabled {
+			if iprisk.Datacenter {
+				if gateway.underAttack {
+					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": session.serverAddress, "country": session.country}).Inc()
+
+					err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
+					if err != nil {
+						log.Println(err)
+					}
+					return errors.New("blocked because iprisk datacenter during attack")
+				}
+
+				if Config.MojangAPIenabled && !session.config.AllowCracked {
 					err := gateway.loginCheck(conn, session)
 					if err != nil {
 						return err
@@ -516,23 +568,68 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 						return err
 					}
 
+					err = gateway.rdb.Set(ctx, "ip:"+session.ip, "half,"+session.country, time.Hour*24).Err()
+					if err != nil {
+						log.Println(err)
+					}
+
 					return errors.New("blocked for rejoin (geoip)")
 				}
+			} else {
+				if gateway.underAttack {
+					if Config.MojangAPIenabled && !session.config.AllowCracked {
+						err := gateway.loginCheck(conn, session)
+						if err != nil {
+							return err
+						}
+					} else {
+						handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": session.serverAddress, "country": session.country}).Inc()
+
+						err = conn.WritePacket(login.ClientBoundDisconnect{
+							Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
+						}.Marshal())
+						if err != nil {
+							return err
+						}
+
+						err = gateway.rdb.Set(ctx, "ip:"+session.ip, "half,"+session.country, time.Hour*24).Err()
+						if err != nil {
+							log.Println(err)
+						}
+
+						return errors.New("blocked for rejoin (geoip)")
+					}
+				} else {
+					err = gateway.rdb.Set(ctx, "ip:"+session.ip, "half,"+session.country, time.Hour*24).Err()
+					if err != nil {
+						log.Println(err)
+					}
+				}
 			}
+		} else {
+			if gateway.underAttack {
+				if Config.MojangAPIenabled && !session.config.AllowCracked {
+					err := gateway.loginCheck(conn, session)
+					if err != nil {
+						return err
+					}
+				} else {
+					handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": session.serverAddress, "country": session.country}).Inc()
 
-			handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": session.serverAddress, "country": session.country}).Inc()
+					err = conn.WritePacket(login.ClientBoundDisconnect{
+						Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
+					}.Marshal())
+					if err != nil {
+						return err
+					}
 
-			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
-			if err != nil {
-				log.Println(err)
-			}
-			return errors.New("blocked because ip " + session.country)
+					err = gateway.rdb.Set(ctx, "ip:"+session.ip, "half,"+session.country, time.Hour*24).Err()
+					if err != nil {
+						log.Println(err)
+					}
 
-		}
-		if contains(Config.GeoIPCountryWhitelist, session.country) {
-			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "half,"+session.country, time.Hour*24).Err()
-			if err != nil {
-				log.Println(err)
+					return errors.New("blocked for rejoin (geoip)")
+				}
 			}
 		}
 	} else {
@@ -554,7 +651,7 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 				if err != nil {
 					return err
 				}
-				handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": session.serverAddress, "country": session.country}).Inc()
+				handshakeCount.With(prometheus.Labels{"type": "cancelled_cache", "host": session.serverAddress, "country": session.country}).Inc()
 				gateway.rdb.TTL(ctx, "ip:"+session.ip).SetVal(time.Hour * 12)
 				return errors.New("blocked because ip cached as false")
 			}
@@ -570,7 +667,6 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 }
 
 func (gateway *Gateway) usernameCheck(session *Session) error {
-	//TODO retire
 	_, err := gateway.rdb.Get(ctx, "username:"+session.username).Result()
 	if err == redis.Nil {
 		_, err := gateway.api.FetchUUID(session.username)

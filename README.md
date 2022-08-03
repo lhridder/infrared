@@ -12,7 +12,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 ## Added/changed Features
 
 - Default configurable placeholder for invalid domain and kick message
-- Antibot based on geoip lookups, encryption checks, authentication checks, protocol checks and username lookups
+- Antibot based on ip lookups, encryption checks, authentication checks, protocol checks and username lookups
 - Caching in redis server (can be used for multiple instances)
 - Added handshakes and blocked connections(multiple types) to prometheus exporter
 - Allow multiple domains in 1 configfile
@@ -49,6 +49,7 @@ mojangAPIenabled: false
 geoip:
   enabled: false
   databaseFile:
+  enableIprisk: false
 redis:
   host: localhost
   pass:
@@ -77,6 +78,7 @@ Values can be left out if they don't deviate from the default, an empty config.y
 - geoip:
   - `enabled` if geoip lookups should be enabled.
   - `databaseFile` where the .mmdb file is located for geoip lookups.
+  - `enableIprisk` whether or not ip lookups should be done through iprisk.info.
 - `mojangAPIenabled` whether to enable mojang API username checks (only works if geoip is enabled).
 - redis:
   - `host` what redis server to connect to when caching geoip and username lookups.
