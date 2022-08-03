@@ -729,14 +729,14 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 		if err != nil {
 			handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
-			return errors.New("invalid encryption response")
+			return errors.New("cannot read encryption response")
 		}
 
 		encryptionRes, encryptionResNew, err := login.UnmarshalServerBoundEncryptionResponse(encryptionResponse, session.ProtocolVersion)
 		if err != nil {
 			handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
-			return errors.New("invalid encryptionResponse")
+			return errors.New("cannot parse encryption response")
 		}
 
 		var decryptedSharedSecret []byte
