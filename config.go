@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"golang.org/x/net/context"
+	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"net"
@@ -45,29 +46,44 @@ type ProxyConfig struct {
 	OfflineStatus     StatusConfig `json:"offlineStatus"`
 }
 
+type Redis struct {
+	Host string `yaml:"host"`
+	Pass string `yaml:"pass"`
+	DB   int    `yaml:"db"`
+}
+
+type Service struct {
+	Enabled bool   `yaml:"enabled"`
+	Bind    string `yaml:"bind"`
+}
+
+type GenericPing struct {
+	Version     string `yaml:"version"`
+	Description string `yaml:"description"`
+	IconPath    string `yaml:"iconPath"`
+}
+
+type GeoIP struct {
+	Enabled      bool   `yaml:"enabled"`
+	DatabaseFile string `yaml:"databaseFile"`
+	EnableIprisk bool   `yaml:"enableIprisk"`
+}
+
 type GlobalConfig struct {
-	ReceiveProxyProtocol   bool     `json:"receiveProxyProtocol"`
-	PrometheusEnabled      bool     `json:"prometheusEnabled"`
-	PrometheusBind         string   `json:"prometheusBind"`
-	ApiEnabled             bool     `json:"apiEnabled"`
-	ApiBind                string   `json:"apiBind"`
-	GenericPingVersion     string   `json:"genericPingVersion"`
-	GenericPingDescription string   `json:"genericPingDescription"`
-	GenericPingIconPath    string   `json:"genericPingIconPath"`
-	GenericJoinResponse    string   `json:"genericJoinResponse"`
-	GeoIPenabled           bool     `json:"geoIPenabled"`
-	GeoIPdatabasefile      string   `json:"geoIPdatabasefile"`
-	GeoIPCountryWhitelist  []string `json:"geoIPcountryWhitelist"`
-	MojangAPIenabled       bool     `json:"mojangAPIenabled"`
-	RedisHost              string   `json:"redisHost"`
-	RedisDB                int      `json:"redisDB"`
-	RedisPass              string   `json:"redisPass"`
-	RejoinMessage          string   `json:"rejoinMessage"`
-	UnderAttack            bool     `json:"underAttack"`
-	Debug                  bool     `json:"debug"`
-	ConnectionTreshold     int      `json:"connectionTreshold"`
-	TrackBandwith          bool     `json:"trackBandwith"`
-	UseRedisConfig         bool     `json:"useRedisConfigs"`
+	Debug                bool   `yaml:"debug"`
+	ReceiveProxyProtocol bool   `yaml:"receiveProxyProtocol"`
+	GenericJoinResponse  string `yaml:"genericJoinResponse"`
+	MojangAPIenabled     bool   `yaml:"mojangAPIenabled"`
+	RejoinMessage        string `yaml:"rejoinMessage"`
+	UnderAttack          bool   `yaml:"underAttack"`
+	ConnectionThreshold  int    `yaml:"connectionThreshold"`
+	TrackBandwidth       bool   `yaml:"trackBandwidth"`
+	UseRedisConfig       bool   `yaml:"useRedisConfigs"`
+	Redis                Redis
+	Api                  Service
+	Prometheus           Service
+	GeoIP                GeoIP
+	GenericPing          GenericPing
 }
 
 type redisEvent struct {
@@ -81,28 +97,38 @@ var (
 )
 
 var DefaultConfig = GlobalConfig{
-	ReceiveProxyProtocol:   false,
-	PrometheusEnabled:      false,
-	PrometheusBind:         ":9100",
-	ApiEnabled:             false,
-	ApiBind:                ":5000",
-	GenericPingVersion:     "Infrared",
-	GenericPingDescription: "There is no proxy associated with this domain. Please check your configuration.",
-	GenericPingIconPath:    "",
-	GenericJoinResponse:    "There is no proxy associated with this domain. Please check your configuration.",
-	GeoIPenabled:           false,
-	GeoIPdatabasefile:      "",
-	GeoIPCountryWhitelist:  []string{},
-	MojangAPIenabled:       false,
-	RedisHost:              "localhost",
-	RedisDB:                0,
-	RedisPass:              "",
-	RejoinMessage:          "Please rejoin to verify your connection.",
-	UnderAttack:            false,
-	Debug:                  false,
-	ConnectionTreshold:     50,
-	TrackBandwith:          false,
-	UseRedisConfig:         false,
+	Debug:                false,
+	ReceiveProxyProtocol: false,
+	UseRedisConfig:       false,
+	UnderAttack:          false,
+	ConnectionThreshold:  50,
+	TrackBandwidth:       false,
+	Prometheus: Service{
+		Enabled: false,
+		Bind:    ":9070",
+	},
+	Api: Service{
+		Enabled: false,
+		Bind:    ":5000",
+	},
+	MojangAPIenabled: false,
+	GeoIP: GeoIP{
+		Enabled:      false,
+		DatabaseFile: "",
+		EnableIprisk: false,
+	},
+	Redis: Redis{
+		Host: "localhost",
+		Pass: "",
+		DB:   0,
+	},
+	RejoinMessage:       "Please rejoin to verify your connection.",
+	GenericJoinResponse: "There is no proxy associated with this domain. Please check your configuration.",
+	GenericPing: GenericPing{
+		Version:     "Infrared",
+		Description: "There is no proxy associated with this domain. Please check your configuration.",
+		IconPath:    "",
+	},
 }
 
 func (cfg *ProxyConfig) Dialer() (*Dialer, error) {
@@ -218,7 +244,7 @@ func DefaultProxyConfig() ProxyConfig {
 		Timeout:           1000,
 		DisconnectMessage: "Sorry {{username}}, but the server is offline.",
 		OfflineStatus: StatusConfig{
-			VersionName:    Config.GenericPingVersion,
+			VersionName:    Config.GenericPing.Version,
 			ProtocolNumber: 757,
 			MaxPlayers:     20,
 			MOTD:           "Server is currently offline.",
@@ -440,36 +466,35 @@ func WatchProxyConfigFolder(path string, out chan *ProxyConfig) error {
 }
 
 func LoadGlobalConfig() error {
-	jsonFile, err := os.Open("config.json")
+	log.Println("Loading config.yml")
+	ymlFile, err := ioutil.ReadFile("config.yml")
 	if err != nil {
 		return err
 	}
 	var config = DefaultConfig
-	jsonParser := json.NewDecoder(jsonFile)
-	err = jsonParser.Decode(&config)
+	err = yaml.Unmarshal(ymlFile, &config)
 	if err != nil {
 		return err
 	}
 	Config = config
-	_ = jsonFile.Close()
 	return nil
 }
 
 func DefaultStatusResponse() protocol.Packet {
 	responseJSON := status.ResponseJSON{
 		Version: status.VersionJSON{
-			Name:     Config.GenericPingVersion,
+			Name:     Config.GenericPing.Version,
 			Protocol: 0,
 		},
 		Players: status.PlayersJSON{
 			Max:    0,
 			Online: 0,
 		},
-		Description: json.RawMessage(fmt.Sprintf("{\"text\":\"%s\"}", Config.GenericPingDescription)),
+		Description: json.RawMessage(fmt.Sprintf("{\"text\":\"%s\"}", Config.GenericPing.Description)),
 	}
 
-	if Config.GenericPingIconPath != "" {
-		img64, err := loadImageAndEncodeToBase64String(Config.GenericPingIconPath)
+	if Config.GenericPing.IconPath != "" {
+		img64, err := loadImageAndEncodeToBase64String(Config.GenericPing.IconPath)
 		if err == nil {
 			responseJSON.Favicon = fmt.Sprintf("data:image/png;base64,%s", img64)
 		}
@@ -487,9 +512,9 @@ func LoadProxyConfigsFromRedis() ([]*ProxyConfig, error) {
 
 	ctx := context.Background()
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     Config.RedisHost + ":6379",
-		Password: Config.RedisPass,
-		DB:       Config.RedisDB,
+		Addr:     Config.Redis.Host + ":6379",
+		Password: Config.Redis.Pass,
+		DB:       Config.Redis.DB,
 	})
 	_, err := rdb.Ping(ctx).Result()
 	if err != nil {
@@ -532,9 +557,9 @@ func LoadProxyConfigsFromRedis() ([]*ProxyConfig, error) {
 func WatchRedisConfigs(out chan *ProxyConfig) error {
 	ctx := context.Background()
 	rdb = redis.NewClient(&redis.Options{
-		Addr:     Config.RedisHost + ":6379",
-		Password: Config.RedisPass,
-		DB:       Config.RedisDB,
+		Addr:     Config.Redis.Host + ":6379",
+		Password: Config.Redis.Pass,
+		DB:       Config.Redis.DB,
 	})
 	_, err := rdb.Ping(ctx).Result()
 	if err != nil {

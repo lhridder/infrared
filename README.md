@@ -16,7 +16,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 - Caching in redis server (can be used for multiple instances)
 - Added handshakes and blocked connections(multiple types) to prometheus exporter
 - Allow multiple domains in 1 configfile
-- Global .json config
+- Global .yml config
 - Removed docker and callback features
 - Status packet caching
 - Bandwith usage tracking for proxy configs through prometheus
@@ -30,52 +30,58 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 
 `./infrared -config-path="."`
 
-## Global config.json
+## Global config.yml
 ### Example/Default
-```json
-{
-  "receiveProxyProtocol": false,
-  "prometheusEnabled": false,
-  "prometheusBind": ":9100",
-  "apiEnabled": false,
-  "apiBind": ":5000",
-  "genericPingVersion": "Infrared",
-  "genericPingDescription": "There is no proxy associated with this domain. Please check your configuration.",
-  "genericPingIconPath": "",
-  "genericJoinResponse": "There is no proxy associated with this domain. Please check your configuration.",
-  "geoIPenabled": false,
-  "geoIPdatabasefile": "",
-  "geoIPcountryWhitelist": ["DE"],
-  "mojangAPIenabled": false,
-  "redisHost": "localhost",
-  "redisDB": 0,
-  "redisPass": "",
-  "rejoinMessage": "Please rejoin to verify your connection.",
-  "underAttack": false,
-  "debug": false,
-  "connectionTreshold": 50,
-  "trackBandwith": false,
-  "useRedisConfigs": false
-}
+```yaml
+debug: false
+receiveProxyProtocol: false
+useRedisConfigs: false
+underAttack: false
+connectionThreshold: 50
+trackBandwidth: false
+prometheus:
+  enabled: false
+  bind: :9070
+api:
+  enabled: false
+  bind: :5000
+mojangAPIenabled: false
+geoip:
+  enabled: false
+  databaseFile:
+redis:
+  host: localhost
+  pass:
+  db: 0
+rejoinMessage: Please rejoin to verify your connection.
+genericJoinResponse: There is no proxy associated with this domain. Please check your configuration.
+genericPing:
+  version: infrared
+  description: There is no proxy associated with this domain. Please check your configuration.
+  iconPath: 
 ```
-Values can be left out if they don't deviate from the default, a config.json with just `{}` is still required for startup.
+Values can be left out if they don't deviate from the default, an empty config.yml is still required for startup.
 ### Fields
 - `receiveProxyProtocol` whether to allow for inbound proxyProtocol connections.
-- `prometheusEnabled` whether to enable to builtin prometheus exporter or not.
-- `prometheusBind` on what port/address to have the prometheus exporter listen on.
-- `apiEnabled` if the json http api should be enabled.
-- `apiBind` on what port/address to have the api listen on.
-- `genericPingVersion` what version should be sent with for an unknown domain status request.
-- `genericPingDescription` what description should be sent with for an unknown domain status request.
-- `genericPingIconPath` what icon should be sent with for an unknown domain status request.
+- prometheus:
+  - `enabled` whether to enable to builtin prometheus exporter or not.
+  - `bind` on what port/address to have the prometheus exporter listen on.
+- api:
+  - `nabled` if the json http api should be enabled.
+  - `bind` on what port/address to have the api listen on.
+- genericPing:
+  - `version` what version should be sent with for an unknown domain status request.
+  - `description` what description should be sent with for an unknown domain status request.
+  - `iconPath` what icon should be sent with for an unknown domain status request.
 - `genericJoinResponse` what text response should be sent for an unknown domain join request.
-- `geoIPenabled` if geoip checks should be enabled.
-- `geoIPdatabasefile` where the .mmdb file is located for geoip checks.
-- `geoIpcountryWhitelist` what countries should be whitelisted when doing geoip checks (2 letter notation).
+- geoip:
+  - `enabled` if geoip lookups should be enabled.
+  - `databaseFile` where the .mmdb file is located for geoip lookups.
 - `mojangAPIenabled` whether to enable mojang API username checks (only works if geoip is enabled).
-- `redisHost` what redis server to connect to when caching geoip and username lookups.
-- `redisDB` what redis db should be used on the redis server.
-- `redisPass` what password should be used when logging into the redis server.
+- redis:
+  - `host` what redis server to connect to when caching geoip and username lookups.
+  - `DB` what redis db should be used on the redis server.
+  - `pass` what password should be used when logging into the redis server.
 - `rejoinMessage` what text response should be sent when a player needs to rejoin to verify they're not a bot.
 - `underAttack` if the instance should permanently be in attack mode.
 - `debug` if debug logs should be enabled.

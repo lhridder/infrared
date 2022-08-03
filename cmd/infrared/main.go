@@ -107,11 +107,11 @@ func main() {
 		}
 	}()
 
-	if infrared.Config.ApiEnabled && !infrared.Config.UseRedisConfig {
-		go api.ListenAndServe(configPath, infrared.Config.ApiBind)
+	if infrared.Config.Api.Enabled && !infrared.Config.UseRedisConfig {
+		go api.ListenAndServe(configPath, infrared.Config.Api.Bind)
 	}
 
-	if infrared.Config.GeoIPenabled {
+	if infrared.Config.GeoIP.Enabled {
 		log.Println("Loading GeoIPDB")
 		err := gateway.LoadDB()
 		if err != nil {
@@ -134,14 +134,14 @@ func main() {
 		}
 	}
 
-	if infrared.Config.PrometheusEnabled {
-		err := gateway.EnablePrometheus(infrared.Config.PrometheusBind)
+	if infrared.Config.Prometheus.Enabled {
+		err := gateway.EnablePrometheus(infrared.Config.Prometheus.Bind)
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
-		if infrared.Config.TrackBandwith {
+		if infrared.Config.TrackBandwidth {
 			go func() {
 				for {
 					gateway.TrackBandwith()

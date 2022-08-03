@@ -82,7 +82,7 @@ type Session struct {
 
 func (gateway *Gateway) LoadDB() error {
 	err := error(nil)
-	gateway.db, err = geoip2.Open(Config.GeoIPdatabasefile)
+	gateway.db, err = geoip2.Open(Config.GeoIP.DatabaseFile)
 	return err
 }
 
@@ -92,9 +92,9 @@ func (gateway *Gateway) LoadMojangAPI() {
 
 func (gateway *Gateway) ConnectRedis() error {
 	gateway.rdb = redis.NewClient(&redis.Options{
-		Addr:     Config.RedisHost + ":6379",
-		Password: Config.RedisPass,
-		DB:       Config.RedisDB,
+		Addr:     Config.Redis.Host + ":6379",
+		Password: Config.Redis.Pass,
+		DB:       Config.Redis.DB,
 	})
 	_, err := gateway.rdb.Ping(ctx).Result()
 	if err != nil {
@@ -227,7 +227,7 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 
 	playersConnected.WithLabelValues(proxy.DomainName())
 
-	if Config.TrackBandwith {
+	if Config.TrackBandwidth {
 		usedBandwith.WithLabelValues(proxy.DomainName())
 	}
 
@@ -276,7 +276,7 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 			_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 			if err := gateway.serve(conn, addr); err != nil {
 				if errors.Is(err, protocol.ErrInvalidPacketID) || errors.Is(err, protocol.ErrInvalidPacketLength) {
-					if Config.GeoIPenabled {
+					if Config.GeoIP.Enabled {
 						ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
 						record, err := gateway.db.Country(net.ParseIP(ip))
@@ -414,7 +414,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	}
 
 	if hs.IsStatusRequest() {
-		if Config.GeoIPenabled {
+		if Config.GeoIP.Enabled {
 			record, err := gateway.db.Country(net.ParseIP(session.ip))
 			session.country = record.Country.IsoCode
 			if err != nil {
@@ -434,7 +434,7 @@ func (gateway *Gateway) handleUnknown(conn Conn, session Session, isLogin bool) 
 		return errors.New("blocked connection because underAttack")
 	}
 
-	if Config.GeoIPenabled {
+	if Config.GeoIP.Enabled {
 		record, err := gateway.db.Country(net.ParseIP(session.ip))
 		session.country = record.Country.IsoCode
 		if err != nil {
@@ -746,7 +746,7 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 }
 
 func (gateway *Gateway) ClearCps() {
-	if gateway.connections >= Config.ConnectionTreshold {
+	if gateway.connections >= Config.ConnectionThreshold {
 		gateway.underAttack = true
 		underAttackStatus.Set(1)
 		log.Printf("[i] Reached connections treshold: %s", strconv.Itoa(gateway.connections))
