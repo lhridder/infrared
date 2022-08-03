@@ -393,17 +393,17 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 			session.username = string(loginStartNew.Name)
 		}
 
-		if Config.GeoIPenabled {
-			err := gateway.geoCheck(conn, &session)
-			if err != nil {
-				return err
-			}
-
-			if Config.MojangAPIenabled && !gateway.underAttack {
+		if Config.GeoIP.Enabled {
+			if Config.MojangAPIenabled && !gateway.underAttack && !session.config.AllowCracked {
 				err := gateway.usernameCheck(&session)
 				if err != nil {
 					return err
 				}
+			}
+
+			err := gateway.geoCheck(conn, &session)
+			if err != nil {
+				return err
 			}
 		}
 		handshakeCount.With(prometheus.Labels{"type": "login", "host": session.serverAddress, "country": session.country}).Inc()
@@ -558,7 +558,7 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 				gateway.rdb.TTL(ctx, "ip:"+session.ip).SetVal(time.Hour * 12)
 				return errors.New("blocked because ip cached as false")
 			}
-			if Config.MojangAPIenabled {
+			if Config.MojangAPIenabled && !session.config.AllowCracked {
 				err := gateway.loginCheck(conn, session)
 				if err != nil {
 					return err

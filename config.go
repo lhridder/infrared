@@ -42,6 +42,7 @@ type ProxyConfig struct {
 	RealIP            bool         `json:"realIp"`
 	Timeout           int          `json:"timeout"`
 	DisconnectMessage string       `json:"disconnectMessage"`
+	AllowCracked      bool         `json:"allowCracked"`
 	OnlineStatus      StatusConfig `json:"onlineStatus"`
 	OfflineStatus     StatusConfig `json:"offlineStatus"`
 }
@@ -249,6 +250,7 @@ func DefaultProxyConfig() ProxyConfig {
 			MaxPlayers:     20,
 			MOTD:           "Server is currently offline.",
 		},
+		AllowCracked: false,
 	}
 }
 
