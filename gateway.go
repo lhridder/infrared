@@ -28,6 +28,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -283,7 +284,7 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 			defer conn.Close()
 			_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 			if err := gateway.serve(conn, addr); err != nil {
-				if errors.Is(err, protocol.ErrInvalidPacketID) || errors.Is(err, protocol.ErrInvalidPacketLength) {
+				if errors.Is(err, protocol.ErrInvalidPacketID) || errors.Is(err, protocol.ErrInvalidPacketLength) || errors.Is(err, os.ErrDeadlineExceeded) {
 					if Config.GeoIP.Enabled {
 						ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
