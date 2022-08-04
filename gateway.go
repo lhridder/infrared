@@ -403,16 +403,16 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 		}
 
 		if Config.GeoIP.Enabled {
+			err := gateway.geoCheck(conn, &session)
+			if err != nil {
+				return err
+			}
+
 			if Config.MojangAPIenabled && !gateway.underAttack && !session.config.AllowCracked {
 				err := gateway.usernameCheck(&session)
 				if err != nil {
 					return err
 				}
-			}
-
-			err := gateway.geoCheck(conn, &session)
-			if err != nil {
-				return err
 			}
 		}
 		handshakeCount.With(prometheus.Labels{"type": "login", "host": session.serverAddress, "country": session.country}).Inc()
