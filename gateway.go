@@ -480,6 +480,7 @@ func (gateway *Gateway) handleUnknown(conn Conn, session Session, isLogin bool) 
 		}
 
 		handshakeCount.With(prometheus.Labels{"type": "status", "host": session.serverAddress, "country": session.country}).Inc()
+		return errors.New("no proxy with domain " + session.serverAddress)
 	}
 
 	// Client send an invalid address/port; we don't have a v for that address
