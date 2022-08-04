@@ -699,7 +699,7 @@ func (gateway *Gateway) usernameCheck(session *Session) error {
 			}
 		}
 		gateway.rdb.TTL(ctx, "username:"+session.username).SetVal(time.Hour * 12)
-		err = gateway.rdb.Set(ctx, "ip:"+session.ip, "true,"+session.country, time.Hour*24).Err()
+		err = gateway.rdb.Set(ctx, "ip:"+session.ip, "half,"+session.country, time.Hour*24).Err()
 		if err != nil {
 			log.Println(err)
 		}
