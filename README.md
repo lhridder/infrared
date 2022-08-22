@@ -55,6 +55,10 @@ redis:
   host: localhost
   pass:
   db: 0
+configredis:
+  host: localhost
+  pass:
+  db: 0
 rejoinMessage: Please rejoin to verify your connection.
 genericJoinResponse: There is no proxy associated with this domain. Please check your configuration.
 genericPing:
@@ -87,6 +91,10 @@ Values can be left out if they don't deviate from the default, an empty config.y
 - `mojangAPIenabled` whether to enable mojang API username checks (only works if geoip is enabled).
 - redis:
   - `host` what redis server to connect to when caching geoip and username lookups.
+  - `DB` what redis db should be used on the redis server.
+  - `pass` what password should be used when logging into the redis server.
+- configredis:
+  - `host` what redis server to connect to when fetching and watching configs.
   - `DB` what redis db should be used on the redis server.
   - `pass` what password should be used when logging into the redis server.
 - tableflip:

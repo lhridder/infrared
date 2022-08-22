@@ -87,6 +87,7 @@ type GlobalConfig struct {
 	TrackBandwidth       bool   `yaml:"trackBandwidth"`
 	UseRedisConfig       bool   `yaml:"useRedisConfigs"`
 	Redis                Redis
+	ConfigRedis          Redis
 	Api                  Service
 	Prometheus           Service
 	GeoIP                GeoIP
@@ -126,6 +127,11 @@ var DefaultConfig = GlobalConfig{
 		EnableIprisk: false,
 	},
 	Redis: Redis{
+		Host: "localhost",
+		Pass: "",
+		DB:   0,
+	},
+	ConfigRedis: Redis{
 		Host: "localhost",
 		Pass: "",
 		DB:   0,
@@ -522,12 +528,13 @@ func DefaultStatusResponse() protocol.Packet {
 
 func LoadProxyConfigsFromRedis() ([]*ProxyConfig, error) {
 	var cfgs []*ProxyConfig
+	rcfg := Config.ConfigRedis
 
 	ctx := context.Background()
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     Config.Redis.Host + ":6379",
-		Password: Config.Redis.Pass,
-		DB:       Config.Redis.DB,
+		Addr:     rcfg.Host + ":6379",
+		Password: rcfg.Pass,
+		DB:       rcfg.DB,
 	})
 	_, err := rdb.Ping(ctx).Result()
 	if err != nil {
@@ -569,10 +576,11 @@ func LoadProxyConfigsFromRedis() ([]*ProxyConfig, error) {
 
 func WatchRedisConfigs(out chan *ProxyConfig) error {
 	ctx := context.Background()
+	rcfg := Config.ConfigRedis
 	rdb = redis.NewClient(&redis.Options{
-		Addr:     Config.Redis.Host + ":6379",
-		Password: Config.Redis.Pass,
-		DB:       Config.Redis.DB,
+		Addr:     rcfg.Host + ":6379",
+		Password: rcfg.Pass,
+		DB:       rcfg.DB,
 	})
 	_, err := rdb.Ping(ctx).Result()
 	if err != nil {
