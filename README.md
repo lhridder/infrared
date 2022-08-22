@@ -204,6 +204,31 @@ scrape_configs:
   * **country:** country where the player ip is from.
   * **host:** the target host specified by the "Server Address" field in the handshake packet. [[1]](https://wiki.vg/Protocol#Handshaking)
 
+## Mitigation
+### GeoIP
+Infrared uses maxminds mmdb format for looking up the countries ips originate from.\
+The required GeoLite2-Country.mmdb/GeoLite2-City.mmdb can be downloaded from [maxmind](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) for free by making an account.
+
+### Configuration
+The following configuration settings are recommended for optimal mitigation, keep in mind this requieres a local/online redis server for caching.
+```yaml
+debug: false
+mojangAPIenabled: true
+geoip:
+  enabled: true
+  databaseFile: GeoLite2-Country.mmdb
+  enableIprisk: true
+redis:
+  host: localhost
+  pass:
+  db: 0
+```
+
+### System
+* Linux kernel >=5.8 (Debian >=11 or Ubuntu >=22.04)
+* Increasing `net.core.somaxconn` in sysctl to for example 50000 (default is 4096). Can be done with `sysctl net.core.somaxconn=50000`.
+* Increasing the `ulimit` to for example 500000 (default is 1024). Can be done with `ulimit -n 500000` when running in a terminal or `LimitNOFILE=500000` in a systemd service file.
+
 ## API
 ### Route examples
 GET `/proxies` will return
