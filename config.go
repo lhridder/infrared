@@ -56,6 +56,7 @@ type Redis struct {
 type Service struct {
 	Enabled bool   `yaml:"enabled"`
 	Bind    string `yaml:"bind"`
+	Bind2   string `yaml:"bind2"`
 }
 
 type GenericPing struct {
@@ -68,6 +69,11 @@ type GeoIP struct {
 	Enabled      bool   `yaml:"enabled"`
 	DatabaseFile string `yaml:"databaseFile"`
 	EnableIprisk bool   `yaml:"enableIprisk"`
+}
+
+type Tableflip struct {
+	Enabled bool   `yaml:"enabled"`
+	PIDfile string `yaml:"pidfile"`
 }
 
 type GlobalConfig struct {
@@ -85,6 +91,7 @@ type GlobalConfig struct {
 	Prometheus           Service
 	GeoIP                GeoIP
 	GenericPing          GenericPing
+	Tableflip            Tableflip
 }
 
 type redisEvent struct {
@@ -129,6 +136,10 @@ var DefaultConfig = GlobalConfig{
 		Version:     "Infrared",
 		Description: "There is no proxy associated with this domain. Please check your configuration.",
 		IconPath:    "",
+	},
+	Tableflip: Tableflip{
+		Enabled: false,
+		PIDfile: "",
 	},
 }
 

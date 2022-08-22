@@ -36,6 +36,11 @@ type Listener struct {
 }
 
 func Listen(addr string) (Listener, error) {
+	if Config.Tableflip.Enabled {
+		l, err := Upg.Listen("tcp", addr)
+		return Listener{Listener: l}, err
+	}
+
 	l, err := net.Listen("tcp", addr)
 	return Listener{Listener: l}, err
 }

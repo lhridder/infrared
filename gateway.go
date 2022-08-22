@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/Lukaesebrot/mojango"
 	"github.com/asaskevich/govalidator"
+	"github.com/cloudflare/tableflip"
 	"github.com/go-redis/redis/v8"
 	"github.com/gofrs/uuid"
 	"github.com/haveachin/infrared/protocol"
@@ -50,6 +51,7 @@ var (
 		Help: "The total number of used bytes of bandwith per proxy",
 	}, []string{"host"})
 	ctx = context.Background()
+	Upg *tableflip.Upgrader
 )
 
 type Gateway struct {
@@ -57,6 +59,7 @@ type Gateway struct {
 	Proxies              sync.Map
 	closed               chan bool
 	wg                   sync.WaitGroup
+	conngroup            sync.WaitGroup
 	ReceiveProxyProtocol bool
 	underAttack          bool
 	connections          int
@@ -143,7 +146,28 @@ func (gateway *Gateway) EnablePrometheus(bind string) error {
 		defer gateway.wg.Done()
 
 		http.Handle("/metrics", promhttp.Handler())
-		http.ListenAndServe(bind, nil)
+
+		if Config.Tableflip.Enabled {
+			var listen net.Listener
+			var err error
+			listen, err = net.Listen("tcp", bind)
+			if err != nil {
+				if strings.Contains(err.Error(), "bind: address already in use") {
+					log.Printf("Starting secondary prometheus listener on %s", Config.Prometheus.Bind2)
+					listen, err = net.Listen("tcp", Config.Prometheus.Bind2)
+					if err != nil {
+						log.Printf("Failed to open secondary prometheus listener: %s", err)
+						return
+					}
+				} else {
+					log.Printf("Failed to open new prometheus listener: %s", err)
+					return
+				}
+			}
+			http.Serve(listen, nil)
+		} else {
+			http.ListenAndServe(bind, nil)
+		}
 	}()
 
 	log.Println("Enabling Prometheus metrics endpoint on", bind)
@@ -166,6 +190,10 @@ func (gateway *Gateway) GenerateKeys() error {
 
 func (gateway *Gateway) KeepProcessActive() {
 	gateway.wg.Wait()
+}
+
+func (gateway *Gateway) WaitConnGroup() {
+	gateway.conngroup.Wait()
 }
 
 // Close closes all listeners
@@ -278,6 +306,8 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 		}
 
 		go func() {
+			gateway.conngroup.Add(1)
+			defer gateway.conngroup.Done()
 			if Config.Debug {
 				log.Printf("[>] Incoming %s on listener %s", conn.RemoteAddr(), addr)
 			}

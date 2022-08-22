@@ -1,11 +1,16 @@
 package main
 
 import (
+	"errors"
 	"flag"
+	"fmt"
+	"github.com/cloudflare/tableflip"
 	"github.com/haveachin/infrared"
 	"github.com/haveachin/infrared/api"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 const (
@@ -107,6 +112,40 @@ func main() {
 		}
 	}()
 
+	if infrared.Config.Tableflip.Enabled {
+		log.Println("Starting tableflip upgrade listener")
+
+		if _, err := os.Stat(infrared.Config.Tableflip.PIDfile); errors.Is(err, os.ErrNotExist) {
+			pid := fmt.Sprint(os.Getpid())
+			bb := []byte(pid)
+			err := os.WriteFile(infrared.Config.Tableflip.PIDfile, bb, os.ModePerm)
+			if err != nil {
+				log.Printf("Failed to set up PIDfile: %s", err)
+				return
+			}
+		}
+
+		var err error
+		infrared.Upg, err = tableflip.New(tableflip.Options{
+			PIDFile: infrared.Config.Tableflip.PIDfile,
+		})
+		if err != nil {
+			log.Printf("Failed to set up Tableflip Upgrader: %s", err)
+			return
+		}
+
+		go func() {
+			sig := make(chan os.Signal, 1)
+			signal.Notify(sig, syscall.SIGHUP)
+			for range sig {
+				err := infrared.Upg.Upgrade()
+				if err != nil {
+					log.Println("upgrade failed:", err)
+				}
+			}
+		}()
+	}
+
 	if infrared.Config.Api.Enabled && !infrared.Config.UseRedisConfig {
 		go api.ListenAndServe(configPath, infrared.Config.Api.Bind)
 	}
@@ -163,5 +202,15 @@ func main() {
 		log.Fatal("Gateway exited; error: ", err)
 	}
 
-	gateway.KeepProcessActive()
+	if infrared.Config.Tableflip.Enabled {
+		if err := infrared.Upg.Ready(); err != nil {
+			panic(err)
+		}
+		<-infrared.Upg.Exit()
+
+		gateway.WaitConnGroup()
+		log.Println("Shutting down infrared")
+	} else {
+		gateway.KeepProcessActive()
+	}
 }

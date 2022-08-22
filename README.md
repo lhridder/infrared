@@ -21,6 +21,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 - Status packet caching
 - Bandwith usage tracking for proxy configs through prometheus
 - Use redis to get proxy configs ([lhridder/infrapi](https://github.com/lhridder/infrapi))
+- Live upgrades using [tableflip](https://github.com/cloudflare/tableflip)
 
 ## Command-Line Flags
 
@@ -60,6 +61,9 @@ genericPing:
   version: infrared
   description: There is no proxy associated with this domain. Please check your configuration.
   iconPath: 
+tableflip:
+  enabled: false
+  pidfile: infrared.pid
 ```
 Values can be left out if they don't deviate from the default, an empty config.yml is still required for startup.
 ### Fields
@@ -67,6 +71,7 @@ Values can be left out if they don't deviate from the default, an empty config.y
 - prometheus:
   - `enabled` whether to enable to builtin prometheus exporter or not.
   - `bind` on what port/address to have the prometheus exporter listen on.
+  - `bind2` what secondary port should be used when using tableflip.
 - api:
   - `nabled` if the json http api should be enabled.
   - `bind` on what port/address to have the api listen on.
@@ -84,6 +89,9 @@ Values can be left out if they don't deviate from the default, an empty config.y
   - `host` what redis server to connect to when caching geoip and username lookups.
   - `DB` what redis db should be used on the redis server.
   - `pass` what password should be used when logging into the redis server.
+- tableflip:
+  - `enabled` whether or not tableflip should be used.
+  - `pidfile` where the PID file used for tableflip is located.
 - `rejoinMessage` what text response should be sent when a player needs to rejoin to verify they're not a bot.
 - `underAttack` if the instance should permanently be in attack mode.
 - `debug` if debug logs should be enabled.
@@ -229,6 +237,36 @@ redis:
 * Increasing `net.core.somaxconn` in sysctl to for example 50000 (default is 4096). Can be done with `sysctl net.core.somaxconn=50000`.
 * Increasing the `ulimit` to for example 500000 (default is 1024). Can be done with `ulimit -n 500000` when running in a terminal or `LimitNOFILE=500000` in a systemd service file.
 
+## Tableflip
+[Tableflip](https://github.com/cloudflare/tableflip) allows for the golang application to be upgraded live by swapping the binary and creating a new process without killing off existing connections.\
+#### Systemd
+To use this feature running infrared under systemd is required, here an example of how the .service file should look:
+Upgrades can then be triggered with `systemctl reload infrared`.
+```text
+[Unit]
+Description=Infrared
+After=network-online.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/srv/infrared
+ExecStart=/srv/infrared/infrared
+ExecReload=/bin/kill -HUP $MAINPID
+PIDFile=/srv/infrared/infrared.pid
+LimitNOFILE=500000
+LimitNPROC=500000
+
+[Install]
+WantedBy=multi-user.target
+```
+#### Configuration
+```yaml
+tableflip:
+  enabled: true
+  pidfile: infrared.pid
+```
+
 ## API
 ### Route examples
 GET `/proxies` will return
@@ -272,3 +310,4 @@ GET `/` will return 200(OK)
 - [MMDB geoip library for golang](https://github.com/oschwald/geoip2-golang)
 - [Govalidator](https://github.com/asaskevich/govalidator)
 - [Mux router](https://github.com/gorilla/mux)
+- [Tableflip](https://github.com/cloudflare/tableflip)
