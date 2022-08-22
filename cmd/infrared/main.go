@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
@@ -50,6 +51,7 @@ func init() {
 }
 
 func main() {
+	log.SetPrefix(strconv.Itoa(os.Getpid()) + " ")
 	log.Println("Loading global config")
 	err := infrared.LoadGlobalConfig()
 	if err != nil {
@@ -207,6 +209,7 @@ func main() {
 			panic(err)
 		}
 		<-infrared.Upg.Exit()
+		log.Println("Starting tableflip shutdown for old instance")
 
 		gateway.WaitConnGroup()
 		log.Println("Shutting down infrared")
