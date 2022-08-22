@@ -22,9 +22,14 @@ func ListenAndServe(configPath string, apiBind string) {
 	router.HandleFunc("/proxies/{name}", addProxyWithName(configPath)).Methods("POST")
 	router.HandleFunc("/proxies/{name}", removeProxy(configPath)).Methods("DELETE")
 
-	err := http.ListenAndServe(apiBind, router)
+	listen, err := infrared.Upg.Listen("tcp", apiBind)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Failed to start API listener: %s", err)
+		return
+	}
+	err = http.Serve(listen, router)
+	if err != nil {
+		log.Printf("Failed to start serving API: %s", err)
 		return
 	}
 }
