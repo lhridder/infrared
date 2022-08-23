@@ -307,7 +307,6 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 
 		go func() {
 			gateway.conngroup.Add(1)
-			defer gateway.conngroup.Done()
 			if Config.Debug {
 				log.Printf("[>] Incoming %s on listener %s", conn.RemoteAddr(), addr)
 			}
@@ -333,12 +332,14 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 				if Config.Debug {
 					log.Printf("[x] %s closed connection with %s; error: %s", conn.RemoteAddr(), addr, err)
 				}
+				gateway.conngroup.Done()
 				return
 			}
 			_ = conn.SetDeadline(time.Time{})
 			if Config.Debug {
 				log.Printf("[x] %s closed connection with %s", conn.RemoteAddr(), addr)
 			}
+			gateway.conngroup.Done()
 		}()
 	}
 }
