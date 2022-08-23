@@ -61,7 +61,7 @@ configredis:
   db: 0
 rejoinMessage: Please rejoin to verify your connection.
 genericJoinResponse: There is no proxy associated with this domain. Please check your configuration.
-genericPing:
+genericping:
   version: infrared
   description: There is no proxy associated with this domain. Please check your configuration.
   iconPath: 
@@ -79,7 +79,7 @@ Values can be left out if they don't deviate from the default, an empty config.y
 - api:
   - `nabled` if the json http api should be enabled.
   - `bind` on what port/address to have the api listen on.
-- genericPing:
+- genericping:
   - `version` what version should be sent with for an unknown domain status request.
   - `description` what description should be sent with for an unknown domain status request.
   - `iconPath` what icon should be sent with for an unknown domain status request.
