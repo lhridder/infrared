@@ -60,6 +60,7 @@ configredis:
   pass:
   db: 0
 rejoinMessage: Please rejoin to verify your connection.
+blockedMessage: Your ip is blocked for suspicious activity.
 genericJoinResponse: There is no proxy associated with this domain. Please check your configuration.
 genericping:
   version: infrared
@@ -101,6 +102,7 @@ Values can be left out if they don't deviate from the default, an empty config.y
   - `enabled` whether or not tableflip should be used.
   - `pidfile` where the PID file used for tableflip is located.
 - `rejoinMessage` what text response should be sent when a player needs to rejoin to verify they're not a bot.
+- `blockedMessage` what text response should be sent when an ip address gets blocked.
 - `underAttack` if the instance should permanently be in attack mode.
 - `debug` if debug logs should be enabled.
 - `connectionTreshold` at what amount of packets per second the underAttack mode should trigger.

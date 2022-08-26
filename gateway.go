@@ -567,6 +567,10 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 			}
 
 			if iprisk.TorExitRelay || iprisk.PublicProxy {
+				err := kickBlocked(conn)
+				if err != nil {
+					return err
+				}
 				handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": session.serverAddress, "country": session.country}).Inc()
 
 				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
@@ -578,6 +582,10 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 
 			if iprisk.Datacenter {
 				if gateway.underAttack {
+					err := kickBlocked(conn)
+					if err != nil {
+						return err
+					}
 					handshakeCount.With(prometheus.Labels{"type": "cancelled_ip", "host": session.serverAddress, "country": session.country}).Inc()
 
 					err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
@@ -595,9 +603,7 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 				} else {
 					handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": session.serverAddress, "country": session.country}).Inc()
 
-					err = conn.WritePacket(login.ClientBoundDisconnect{
-						Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
-					}.Marshal())
+					err := kickRejoin(conn)
 					if err != nil {
 						return err
 					}
@@ -619,9 +625,7 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 					} else {
 						handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": session.serverAddress, "country": session.country}).Inc()
 
-						err = conn.WritePacket(login.ClientBoundDisconnect{
-							Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
-						}.Marshal())
+						err := kickRejoin(conn)
 						if err != nil {
 							return err
 						}
@@ -650,9 +654,7 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 				} else {
 					handshakeCount.With(prometheus.Labels{"type": "cancelled", "host": session.serverAddress, "country": session.country}).Inc()
 
-					err = conn.WritePacket(login.ClientBoundDisconnect{
-						Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
-					}.Marshal())
+					err := kickRejoin(conn)
 					if err != nil {
 						return err
 					}
@@ -761,6 +763,10 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 
 		encryptionResponse, err := conn.ReadPacket()
 		if err != nil {
+			err := kickBlocked(conn)
+			if err != nil {
+				return err
+			}
 			handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 			return errors.New("cannot read encryption response")
@@ -768,6 +774,10 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 
 		encryptionRes, encryptionResNew, err := login.UnmarshalServerBoundEncryptionResponse(encryptionResponse, session.ProtocolVersion)
 		if err != nil {
+			err := kickBlocked(conn)
+			if err != nil {
+				return err
+			}
 			handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 			return errors.New("cannot parse encryption response")
@@ -777,6 +787,10 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 		if !reflect.ValueOf(encryptionResNew).IsZero() {
 			decryptedSharedSecret, err = gateway.privateKey.Decrypt(rand.Reader, encryptionResNew.SharedSecret, nil)
 			if err != nil {
+				err := kickBlocked(conn)
+				if err != nil {
+					return err
+				}
 				handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 				return errors.New("failed to decrypt shared secret")
@@ -785,12 +799,20 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 		} else {
 			decryptedVerifyToken, err := gateway.privateKey.Decrypt(rand.Reader, encryptionRes.VerifyToken, nil)
 			if err != nil {
+				err := kickBlocked(conn)
+				if err != nil {
+					return err
+				}
 				handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 				return errors.New("failed to decrypt verify token")
 			}
 
 			if !bytes.Equal(decryptedVerifyToken, verifyToken) {
+				err := kickBlocked(conn)
+				if err != nil {
+					return err
+				}
 				handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 				return errors.New("invalid verify token")
@@ -798,6 +820,10 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 
 			decryptedSharedSecret, err = gateway.privateKey.Decrypt(rand.Reader, encryptionRes.SharedSecret, nil)
 			if err != nil {
+				err := kickBlocked(conn)
+				if err != nil {
+					return err
+				}
 				handshakeCount.With(prometheus.Labels{"type": "cancelled_encryption", "host": session.serverAddress, "country": session.country}).Inc()
 				err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 				return errors.New("failed to decrypt shared secret")
@@ -823,6 +849,10 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 		}
 
 		if resp.StatusCode != http.StatusOK {
+			err := kickBlocked(conn)
+			if err != nil {
+				return err
+			}
 			handshakeCount.With(prometheus.Labels{"type": "cancelled_authentication", "host": session.serverAddress, "country": session.country}).Inc()
 			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 			return errors.New("unable to authenticate session " + resp.Status)
@@ -839,6 +869,10 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 		_ = resp.Body.Close()
 
 		if session.username != p.Name {
+			err := kickBlocked(conn)
+			if err != nil {
+				return err
+			}
 			handshakeCount.With(prometheus.Labels{"type": "cancelled_authentication", "host": session.serverAddress, "country": session.country}).Inc()
 			err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*12).Err()
 			return errors.New("invalid username: " + session.username + " != " + p.Name)
@@ -853,9 +887,7 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 
 		log.Printf("[i] %s finished encryption check with uuid %s", p.Name, playerUUID)
 
-		err = conn.WritePacket(login.ClientBoundDisconnect{
-			Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
-		}.Marshal())
+		err = kickRejoin(conn)
 		if err != nil {
 			return err
 		}
@@ -903,6 +935,18 @@ func (gateway *Gateway) TrackBandwith() {
 		return false
 	})
 	time.Sleep(5 * time.Second)
+}
+
+func kickRejoin(conn Conn) error {
+	return conn.WritePacket(login.ClientBoundDisconnect{
+		Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.RejoinMessage)),
+	}.Marshal())
+}
+
+func kickBlocked(conn Conn) error {
+	return conn.WritePacket(login.ClientBoundDisconnect{
+		Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.BlockedMessage)),
+	}.Marshal())
 }
 
 func contains(s []string, str string) bool {

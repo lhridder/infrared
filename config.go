@@ -82,6 +82,7 @@ type GlobalConfig struct {
 	GenericJoinResponse  string `yaml:"genericJoinResponse"`
 	MojangAPIenabled     bool   `yaml:"mojangAPIenabled"`
 	RejoinMessage        string `yaml:"rejoinMessage"`
+	BlockedMessage       string `yaml:"blockedMessage"`
 	UnderAttack          bool   `yaml:"underAttack"`
 	ConnectionThreshold  uint64 `yaml:"connectionThreshold"`
 	TrackBandwidth       bool   `yaml:"trackBandwidth"`
@@ -137,6 +138,7 @@ var DefaultConfig = GlobalConfig{
 		DB:   0,
 	},
 	RejoinMessage:       "Please rejoin to verify your connection.",
+	BlockedMessage:      "Your ip is blocked for suspicious activity.",
 	GenericJoinResponse: "There is no proxy associated with this domain. Please check your configuration.",
 	GenericPing: GenericPing{
 		Version:     "Infrared",
