@@ -219,6 +219,8 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 
 	if proxy.cacheStatusTime.IsZero() || time.Now().Sub(proxy.cacheStatusTime) > 10*time.Second {
 		proxy.mu.Lock()
+		proxy.cacheStatusTime = time.Now()
+
 		dialer, err := proxy.Dialer()
 		if err != nil {
 			return err
