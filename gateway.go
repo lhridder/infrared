@@ -34,6 +34,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -62,7 +63,7 @@ type Gateway struct {
 	conngroup            sync.WaitGroup
 	ReceiveProxyProtocol bool
 	underAttack          bool
-	connections          int
+	connections          uint64
 	db                   *geoip2.Reader
 	api                  *mojango.Client
 	rdb                  *redis.Client
@@ -358,7 +359,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 		}
 	}()
 
-	gateway.connections++
+	atomic.AddUint64(&gateway.connections, 1)
 
 	session := Session{}
 
@@ -878,11 +879,11 @@ func (gateway *Gateway) ClearCps() {
 	if gateway.connections >= Config.ConnectionThreshold {
 		gateway.underAttack = true
 		underAttackStatus.Set(1)
-		log.Printf("[i] Reached connections treshold: %s", strconv.Itoa(gateway.connections))
+		log.Printf("[i] Reached connections treshold: %s", strconv.FormatUint(gateway.connections, 10))
 		time.Sleep(time.Minute)
 	} else {
 		if gateway.underAttack {
-			log.Printf("[i] Disabled connections treshold: %s", strconv.Itoa(gateway.connections))
+			log.Printf("[i] Disabled connections treshold: %s", strconv.FormatUint(gateway.connections, 10))
 			gateway.underAttack = false
 			underAttackStatus.Set(0)
 		}

@@ -83,7 +83,7 @@ type GlobalConfig struct {
 	MojangAPIenabled     bool   `yaml:"mojangAPIenabled"`
 	RejoinMessage        string `yaml:"rejoinMessage"`
 	UnderAttack          bool   `yaml:"underAttack"`
-	ConnectionThreshold  int    `yaml:"connectionThreshold"`
+	ConnectionThreshold  uint64 `yaml:"connectionThreshold"`
 	TrackBandwidth       bool   `yaml:"trackBandwidth"`
 	UseRedisConfig       bool   `yaml:"useRedisConfigs"`
 	Redis                Redis
