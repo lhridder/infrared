@@ -154,6 +154,7 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 		return proxy.handleLoginRequest(conn, session)
 	}
 	proxy.cacheOnlineStatus = true
+	proxy.cacheOnlineTime = time.Now()
 	defer rconn.Close()
 
 	if proxy.ProxyProtocol() {
@@ -219,6 +220,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 
 	if proxy.cacheStatusTime.IsZero() || time.Now().Sub(proxy.cacheStatusTime) > 10*time.Second {
 		proxy.mu.Lock()
+		defer proxy.mu.Unlock()
 		proxy.cacheStatusTime = time.Now()
 
 		dialer, err := proxy.Dialer()
@@ -285,7 +287,6 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		proxy.cacheOnlineStatus = true
 		proxy.cacheStatusTime = time.Now()
 		proxy.cacheResponse = clientboundResponse
-		proxy.mu.Unlock()
 
 		rconn.Close()
 	}
