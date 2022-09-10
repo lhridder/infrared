@@ -230,7 +230,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 
 		rconn, err := dialer.Dial(proxyTo)
 		if err != nil {
-			log.Printf("[i] Failed to update cache for %s, %s did not respond to ping; is the target offline?", proxyUID, proxyTo)
+			log.Printf("[i] Failed to update cache for %s, %s did not respond: %s", proxyUID, proxyTo, err)
 			proxy.cacheOnlineStatus = false
 			proxy.cacheStatusTime = time.Now()
 			proxy.cacheResponse = status.ClientBoundResponse{}
