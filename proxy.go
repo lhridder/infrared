@@ -155,6 +155,7 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 		return proxy.handleLoginRequest(conn, session)
 	}
 	proxy.cacheOnlineStatus = true
+	proxy.cacheOnlineTime = time.Now()
 	defer rconn.Close()
 
 	if proxy.ProxyProtocol() {
