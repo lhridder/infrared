@@ -3,13 +3,6 @@ package infrared
 import (
 	"encoding/json"
 	"fmt"
-	"log"
-	"net"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
@@ -17,6 +10,12 @@ import (
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"log"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 var (
