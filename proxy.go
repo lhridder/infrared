@@ -301,7 +301,6 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		proxy.cacheResponse = clientboundResponse
 
 		rconn.Close()
-		proxy.mu.Unlock()
 
 	}
 
