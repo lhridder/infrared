@@ -184,11 +184,7 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 	if err != nil {
 		return err
 	}
-
-	if Config.Debug {
-		log.Printf("[i] %s with username %s connects through %s", session.connRemoteAddr, session.username, proxy.UID())
-	}
-
+	log.Printf("[i] %s with username %s connects through %s", session.connRemoteAddr, session.username, proxy.UID())
 	playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
 	defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
 
@@ -245,10 +241,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 			proxy.cacheStatusTime = time.Now()
 			proxy.cacheResponse = status.ClientBoundResponse{}
 			return proxy.handleStatusRequest(conn, false)
-
 		}
-
-		
 
 		if proxy.RealIP() {
 			hs.UpgradeToRealIP(session.connRemoteAddr, time.Now())
@@ -301,7 +294,6 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		proxy.cacheResponse = clientboundResponse
 
 		rconn.Close()
-
 	}
 
 	if !proxy.cacheOnlineStatus {
