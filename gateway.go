@@ -436,13 +436,20 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 		}
 
 		if Config.GeoIP.Enabled {
-			err := gateway.geoCheck(conn, &session)
-			if err != nil {
-				return err
-			}
 
-			if Config.MojangAPIenabled && !gateway.underAttack && !session.config.AllowCracked {
-				err := gateway.usernameCheck(&session)
+			if Config.MojangAPIenabled && !session.config.AllowCracked {
+				err := gateway.geoCheckOnline(conn, &session)
+				if err != nil {
+					return err
+				}
+				if !gateway.underAttack {
+					err := gateway.usernameCheck(&session)
+					if err != nil {
+						return err
+					}
+				}
+			} else {
+				err := gateway.geoCheckCracked(conn, &session)
 				if err != nil {
 					return err
 				}
@@ -528,7 +535,7 @@ func (gateway *Gateway) handleUnknown(conn Conn, session Session, isLogin bool) 
 	return errors.New("no proxy with domain " + session.serverAddress)
 }
 
-func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
+func (gateway *Gateway) geoCheckOnline(conn Conn, session *Session) error {
 	result, err := gateway.rdb.Get(ctx, "ip:"+session.ip).Result()
 	if err == redis.Nil {
 		record, err := gateway.db.Country(net.ParseIP(session.ip))
@@ -700,6 +707,101 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 		}
 	}
 	return nil
+}
+func (gateway *Gateway) geoCheckCracked(conn Conn, session *Session) error {
+	result, err := gateway.rdb.Get(ctx, "ip:"+session.ip).Result()
+	if err == redis.Nil {
+		record, err := gateway.db.Country(net.ParseIP(session.ip))
+		if err != nil {
+			log.Printf("[i] failed to lookup country for %s", session.connRemoteAddr)
+		}
+		session.country = record.Country.IsoCode
+
+		results := strings.Split(result, ",")
+		session.country = results[1]
+		
+		if gateway.underAttack {
+			if !MojangAPIenabled || AllowCracked {
+				if results[0] == "false" {
+					err := conn.Close()
+					if err != nil {
+						return err
+					}
+					handshakeCount.With(prometheus.Labels{"type": "cancelled_blacklist", "host": session.serverAddress, "country": session.country}).Inc()
+				} else {
+
+					if results[0] == "half" {
+						if Config.GeoIP.EnableIprisk {
+							var client http.Client
+				
+							req, err := http.NewRequest(http.MethodGet, "https://beta.iprisk.info/v1/"+session.ip, nil)
+							if err != nil {
+								return errors.New("cannot format request to iprisk because of " + err.Error())
+							}
+							req.Header.Set("User-Agent", "github.com/lhridder/infrared")
+				
+							res, err := client.Do(req)
+							if err != nil {
+								return errors.New("cannot query iprisk because of " + err.Error())
+							}
+				
+							if res.StatusCode != 200 {
+								return errors.New("failed to query iprisk, error code: " + strconv.Itoa(res.StatusCode))
+							}
+				
+							body, err := ioutil.ReadAll(res.Body)
+							if err != nil {
+								return errors.New("failed to read iprisk response: " + err.Error())
+							}
+				
+							var iprisk iprisk
+							err = json.Unmarshal(body, &iprisk)
+							if err != nil {
+								return errors.New("failed to unmarshal iprisk response: " + err.Error())
+							}
+				
+							if iprisk.TorExitRelay || iprisk.PublicProxy || iprisk.Datacenter{
+								err := conn.Close()
+								if err != nil {
+									return err
+								}
+								handshakeCount.With(prometheus.Labels{"type": "cancelled_iprisk", "host": session.serverAddress, "country": session.country}).Inc()
+				
+								err = gateway.rdb.Set(ctx, "ip:"+session.ip, "false,"+session.country, time.Hour*48).Err()
+								if err != nil {
+									log.Println(err)
+								}
+								return errors.New("blocked because iprisk tor/proxy")
+							} 
+							err = gateway.rdb.Set(ctx, "username:"+session.username, "true", time.Hour*12).Err()
+						}
+					} else {
+						if results[0] == "true" {
+							return err
+					} else {
+						err = kickRejoin(conn)
+						err = gateway.rdb.Set(ctx, "username:"+session.username, "half", time.Hour*12).Err()
+						if err != nil {
+							return err
+						}
+					}
+				}
+			}
+
+		} else {
+			if err != nil {
+				if err == redis.ErrClosed {
+					err := gateway.ConnectRedis()
+					if err != nil {
+						return err
+					}
+				} else {
+					return err
+				}
+			}
+		}
+		return nil
+	}
 }
 
 func (gateway *Gateway) usernameCheck(session *Session) error {
