@@ -3,6 +3,13 @@ package infrared
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
 	"github.com/haveachin/infrared/protocol/login"
@@ -10,12 +17,6 @@ import (
 	"github.com/pires/go-proxyproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"log"
-	"net"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 var (
@@ -154,7 +155,6 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 		return proxy.handleLoginRequest(conn, session)
 	}
 	proxy.cacheOnlineStatus = true
-	proxy.cacheOnlineTime = time.Now()
 	defer rconn.Close()
 
 	if proxy.ProxyProtocol() {
@@ -184,7 +184,11 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("[i] %s with username %s connects through %s", session.connRemoteAddr, session.username, proxy.UID())
+
+	if Config.Debug {
+		log.Printf("[i] %s with username %s connects through %s", session.connRemoteAddr, session.username, proxy.UID())
+	}
+
 	playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
 	defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
 
@@ -230,13 +234,21 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 
 		rconn, err := dialer.Dial(proxyTo)
 		if err != nil {
-			log.Printf("[i] Failed to update cache for %s, %s did not respond: %s", proxyUID, proxyTo, err)
+
+			if !proxy.cacheStatusTime.IsZero() || time.Now().Sub(proxy.cacheStatusTime) < 30*time.Second {
+				log.Printf("[i] Failed to update cache for %s, %s retry updating after 10 sec.", proxyUID, proxyTo)
+				return proxy.handleStatusRequest(conn, true)
+			}
+
+			log.Printf("[i] Failed to update cache for %s, %s did not respond to ping for 30 seconds. Status set to offline.", proxyUID, proxyTo)
 			proxy.cacheOnlineStatus = false
 			proxy.cacheStatusTime = time.Now()
 			proxy.cacheResponse = status.ClientBoundResponse{}
-
 			return proxy.handleStatusRequest(conn, false)
+
 		}
+
+		
 
 		if proxy.RealIP() {
 			hs.UpgradeToRealIP(session.connRemoteAddr, time.Now())
@@ -289,6 +301,8 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		proxy.cacheResponse = clientboundResponse
 
 		rconn.Close()
+		proxy.mu.Unlock()
+
 	}
 
 	if !proxy.cacheOnlineStatus {
