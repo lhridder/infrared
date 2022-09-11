@@ -232,11 +232,12 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		if err != nil {
 
 			if !proxy.cacheStatusTime.IsZero() || time.Now().Sub(proxy.cacheStatusTime) < 30*time.Second {
-				log.Printf("[i] Failed to update cache for %s, %s retry updating after 10 sec.", proxyUID, proxyTo)
+				log.Printf("[i] Failed to update cache for %s, %s retry to update in 10 seconds before setting offline status.", proxyUID, proxyTo)
 				return proxy.handleStatusRequest(conn, true)
 			}
 
-			log.Printf("[i] Failed to update cache for %s, %s did not respond to ping for 30 seconds. Status set to offline.", proxyUID, proxyTo)
+			log.Printf("[i] Failed to update cache for %s, %s did not respond: %s", proxyUID, proxyTo, err)
+
 			proxy.cacheOnlineStatus = false
 			proxy.cacheStatusTime = time.Now()
 			proxy.cacheResponse = status.ClientBoundResponse{}
