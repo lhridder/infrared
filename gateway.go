@@ -803,7 +803,7 @@ func (gateway *Gateway) geoCheckCracked(conn Conn, session *Session) error {
 		return nil
 	}
 }
-
+}
 func (gateway *Gateway) usernameCheck(session *Session) error {
 	_, err := gateway.rdb.Get(ctx, "username:"+session.username).Result()
 	if err == redis.Nil {
