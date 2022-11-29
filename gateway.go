@@ -948,12 +948,3 @@ func kickBlocked(conn Conn) error {
 		Reason: protocol.Chat(fmt.Sprintf("{\"text\":\"%s\"}", Config.BlockedMessage)),
 	}.Marshal())
 }
-
-func contains(s []string, str string) bool {
-	for _, v := range s {
-		if v == str {
-			return true
-		}
-	}
-	return false
-}
