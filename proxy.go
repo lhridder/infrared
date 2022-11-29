@@ -277,11 +277,11 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 
 		clientboundResponsePacket, err := rconn.ReadPacket(false)
 		if err != nil {
-			return fmt.Errorf("failed to read status reponse: %s", err)
+			return fmt.Errorf("failed to read status response: %s", err)
 		}
 		clientboundResponse, err := status.UnmarshalClientBoundResponse(clientboundResponsePacket)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal status reponse: %s", err)
+			return fmt.Errorf("failed to unmarshal status response: %s", err)
 		}
 
 		proxy.cacheOnlineStatus = true

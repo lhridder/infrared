@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
-	"strconv"
 )
 
 // Packet is the raw representation of message that is send between the client and the server
@@ -59,8 +57,7 @@ func ReadPacketBytes(r DecodeReader, limit bool) ([]byte, error) {
 		return nil, err
 	}
 
-	if limit && packetLength < 1 || packetLength > 16384 {
-		log.Printf("Packet length invalid: %s", strconv.Itoa(int(packetLength)))
+	if limit && (packetLength < 1 || packetLength > 16384) {
 		return nil, ErrInvalidPacketLength
 	}
 
