@@ -660,13 +660,6 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 					if err != nil {
 						return err
 					}
-
-					err = gateway.rdb.Set(ctx, "ip:"+session.ip, "half,"+session.country, time.Hour*24).Err()
-					if err != nil {
-						log.Println(err)
-					}
-
-					return errors.New("blocked for rejoin (geoip)")
 				}
 			}
 		}
@@ -683,16 +676,18 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 		}
 		results := strings.Split(result, ",")
 		session.country = results[1]
-		if gateway.underAttack {
-			if results[0] == "false" {
-				err := conn.Close()
-				if err != nil {
-					return err
-				}
-				handshakeCount.With(prometheus.Labels{"type": "cancelled_cache", "host": session.serverAddress, "country": session.country}).Inc()
-				gateway.rdb.TTL(ctx, "ip:"+session.ip).SetVal(time.Hour * 12)
-				return errors.New("blocked because ip cached as false")
+
+		if results[0] == "false" {
+			err := kickBlocked(conn)
+			if err != nil {
+				return err
 			}
+			handshakeCount.With(prometheus.Labels{"type": "cancelled_cache", "host": session.serverAddress, "country": session.country}).Inc()
+			gateway.rdb.TTL(ctx, "ip:"+session.ip).SetVal(time.Hour * 12)
+			return errors.New("blocked because ip cached as false")
+		}
+
+		if gateway.underAttack {
 			if Config.MojangAPIenabled && !session.config.AllowCracked {
 				err := gateway.loginCheck(conn, session)
 				if err != nil {
@@ -747,6 +742,16 @@ func (gateway *Gateway) usernameCheck(session *Session) error {
 
 func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 	result, err := gateway.rdb.Get(ctx, "ip:"+session.ip).Result()
+	if err != nil {
+		if err == redis.ErrClosed {
+			err := gateway.ConnectRedis()
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
 	results := strings.Split(result, ",")
 	if results[0] != "true" {
 		verifyToken := make([]byte, 4)
