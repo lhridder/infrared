@@ -202,7 +202,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		return err
 	}
 
-	statusRequest, err := conn.ReadPacket()
+	statusRequest, err := conn.ReadPacket(true)
 	if err != nil {
 		return err
 	}
@@ -275,7 +275,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 			return err
 		}
 
-		clientboundResponsePacket, err := rconn.ReadPacket()
+		clientboundResponsePacket, err := rconn.ReadPacket(false)
 		if err != nil {
 			return err
 		}
@@ -323,7 +323,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		return err
 	}
 
-	pingPacket, err := conn.ReadPacket()
+	pingPacket, err := conn.ReadPacket(true)
 	if err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ func (proxy *Proxy) handleStatusRequest(conn Conn, online bool) error {
 		return err
 	}
 
-	pingPk, err := conn.ReadPacket()
+	pingPk, err := conn.ReadPacket(true)
 	if err != nil {
 		return err
 	}

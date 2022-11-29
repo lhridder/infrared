@@ -373,7 +373,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	}
 
 	err := error(nil)
-	session.handshakePacket, err = conn.ReadPacket()
+	session.handshakePacket, err = conn.ReadPacket(true)
 	if err != nil {
 		return err
 	}
@@ -413,7 +413,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 	session.config = proxy.Config
 
 	if hs.IsLoginRequest() {
-		session.loginPacket, err = conn.ReadPacket()
+		session.loginPacket, err = conn.ReadPacket(true)
 		if err != nil {
 			return err
 		}
@@ -485,7 +485,7 @@ func (gateway *Gateway) handleUnknown(conn Conn, session Session, isLogin bool) 
 	}
 
 	if !isLogin {
-		_, err := conn.ReadPacket()
+		_, err := conn.ReadPacket(true)
 		if err != nil {
 			return err
 		}
@@ -495,7 +495,7 @@ func (gateway *Gateway) handleUnknown(conn Conn, session Session, isLogin bool) 
 			return err
 		}
 
-		pingPacket, err := conn.ReadPacket()
+		pingPacket, err := conn.ReadPacket(true)
 		if err != nil {
 			return err
 		}
@@ -768,7 +768,7 @@ func (gateway *Gateway) loginCheck(conn Conn, session *Session) error {
 			return err
 		}
 
-		encryptionResponse, err := conn.ReadPacket()
+		encryptionResponse, err := conn.ReadPacket(true)
 		if err != nil {
 			err := kickBlocked(conn)
 			if err != nil {

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
+	"strconv"
 )
 
 // Packet is the raw representation of message that is send between the client and the server
@@ -51,13 +53,14 @@ func MarshalPacket(ID byte, fields ...FieldEncoder) Packet {
 }
 
 // ReadPacketBytes decodes a byte stream and cuts the first Packet as a byte array out
-func ReadPacketBytes(r DecodeReader) ([]byte, error) {
+func ReadPacketBytes(r DecodeReader, limit bool) ([]byte, error) {
 	var packetLength VarInt
 	if err := packetLength.Decode(r); err != nil {
 		return nil, err
 	}
 
-	if packetLength < 1 || packetLength > 16384 {
+	if limit && packetLength < 1 || packetLength > 16384 {
+		log.Printf("Packet length invalid: %s", strconv.Itoa(int(packetLength)))
 		return nil, ErrInvalidPacketLength
 	}
 
@@ -70,8 +73,8 @@ func ReadPacketBytes(r DecodeReader) ([]byte, error) {
 }
 
 // ReadPacket decodes and decompresses a byte stream and cuts the first Packet out
-func ReadPacket(r DecodeReader) (Packet, error) {
-	data, err := ReadPacketBytes(r)
+func ReadPacket(r DecodeReader, limit bool) (Packet, error) {
+	data, err := ReadPacketBytes(r, limit)
 	if err != nil {
 		return Packet{}, err
 	}
@@ -89,5 +92,5 @@ func PeekPacket(p PeekReader) (Packet, error) {
 		cursor:     0,
 	}
 
-	return ReadPacket(&r)
+	return ReadPacket(&r, false)
 }

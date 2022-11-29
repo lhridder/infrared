@@ -13,7 +13,7 @@ type PacketWriter interface {
 }
 
 type PacketReader interface {
-	ReadPacket() (protocol.Packet, error)
+	ReadPacket(limit bool) (protocol.Packet, error)
 }
 
 type PacketPeeker interface {
@@ -96,8 +96,8 @@ func (c *conn) Write(b []byte) (int, error) {
 }
 
 // ReadPacket read a Packet from Conn.
-func (c *conn) ReadPacket() (protocol.Packet, error) {
-	return protocol.ReadPacket(c.r)
+func (c *conn) ReadPacket(limit bool) (protocol.Packet, error) {
+	return protocol.ReadPacket(c.r, limit)
 }
 
 // PeekPacket peeks a Packet from Conn.
