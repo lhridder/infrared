@@ -548,10 +548,12 @@ func (gateway *Gateway) geoCheck(conn Conn, session *Session) error {
 
 			res, err := client.Do(req)
 			if err != nil {
+				log.Printf("Cannot query iprisk for %s because of %s", session.ip, err.Error())
 				return errors.New("cannot query iprisk because of " + err.Error())
 			}
 
 			if res.StatusCode != 200 {
+				log.Printf("Failed to query iprisk for %s, status code %s", session.ip, strconv.Itoa(res.StatusCode))
 				return errors.New("failed to query iprisk, error code: " + strconv.Itoa(res.StatusCode))
 			}
 
