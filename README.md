@@ -235,7 +235,6 @@ mojangAPIenabled: true
 geoip:
   enabled: true
   databaseFile: GeoLite2-Country.mmdb
-  enableIprisk: true
 redis:
   host: localhost
   pass:
