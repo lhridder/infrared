@@ -311,7 +311,11 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 			if Config.Debug {
 				log.Printf("[>] Incoming %s on listener %s", conn.RemoteAddr(), addr)
 			}
-			defer conn.Close()
+			if gateway.underAttack {
+				defer conn.CloseForce()
+			} else {
+				defer conn.Close()
+			}
 			_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 			if err := gateway.serve(conn, addr); err != nil {
 				if errors.Is(err, protocol.ErrInvalidPacketID) || errors.Is(err, protocol.ErrInvalidPacketLength) || errors.Is(err, os.ErrDeadlineExceeded) {

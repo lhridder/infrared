@@ -61,6 +61,7 @@ type Conn interface {
 	PacketPeeker
 	PacketCipherer
 
+	CloseForce() error
 	Reader() *bufio.Reader
 }
 
@@ -125,6 +126,18 @@ func (c *conn) SetCipher(ecoStream, decoStream cipher.Stream) {
 		S: ecoStream,
 		W: c.Conn,
 	}
+}
+
+func (c *conn) CloseForce() error {
+	err := c.Conn.(*net.TCPConn).SetLinger(0)
+	if err != nil {
+		return err
+	}
+	err = c.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *conn) Reader() *bufio.Reader {
