@@ -28,13 +28,13 @@ func ListenAndServe(configPath string, apiBind string) {
 			log.Printf("Failed to start API listener: %s", err)
 			return
 		}
-		err = http.Serve(listen, nil)
+		err = http.Serve(listen, router)
 		if err != nil {
 			log.Printf("Failed to start serving API: %s", err)
 			return
 		}
 	} else {
-		err := http.ListenAndServe(apiBind, nil)
+		err := http.ListenAndServe(apiBind, router)
 		if err != nil {
 			log.Printf("Failed to start serving API: %s", err)
 			return
