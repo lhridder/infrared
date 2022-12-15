@@ -22,7 +22,7 @@ var (
 	playersConnected = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "infrared_connected",
 		Help: "The total number of connected players",
-	}, []string{"host"})
+	}, []string{"proxy", "host"})
 )
 
 func proxyUID(domain, addr string) string {
@@ -184,9 +184,9 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("[i] %s with username %s connects through %s", session.connRemoteAddr, session.username, proxy.UID())
-	playersConnected.With(prometheus.Labels{"host": proxyDomain}).Inc()
-	defer playersConnected.With(prometheus.Labels{"host": proxyDomain}).Dec()
+	log.Printf("[i] %s with username %s connects through proxy %s (host: %s@%s)", session.connRemoteAddr, session.username, proxy.UID(), session.serverAddress, proxy.ListenTo())
+	playersConnected.With(prometheus.Labels{"proxy": proxyDomain, "host": session.serverAddress}).Inc()
+	defer playersConnected.With(prometheus.Labels{"proxy": proxyDomain, "host": session.serverAddress}).Dec()
 
 	go pipe(rconn, conn, proxy)
 	pipe(conn, rconn, proxy)

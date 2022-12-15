@@ -220,7 +220,9 @@ func (gateway *Gateway) CloseProxy(proxyUID string) {
 		gateway.Proxies.Delete(uid)
 	}
 
-	playersConnected.DeleteLabelValues(proxy.DomainName())
+	for i := range proxy.DomainNames() {
+		playersConnected.DeleteLabelValues(proxy.DomainName(), proxy.DomainNames()[i])
+	}
 
 	closeListener := true
 	gateway.Proxies.Range(func(k, v interface{}) bool {
@@ -263,7 +265,9 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 		}
 	}
 
-	playersConnected.WithLabelValues(proxy.DomainName())
+	for i := range proxy.DomainNames() {
+		playersConnected.WithLabelValues(proxy.DomainName(), proxy.DomainNames()[i])
+	}
 
 	if Config.TrackBandwidth {
 		usedBandwith.WithLabelValues(proxy.DomainName())
