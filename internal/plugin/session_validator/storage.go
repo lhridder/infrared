@@ -39,8 +39,17 @@ func newRedis(cfg redisConfig) (*redisStorage, error) {
 		return nil, err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), opts.ReadTimeout)
+	defer cancel()
+
+	cli := redis.NewClient(opts)
+	_, err = cli.Ping(ctx).Result()
+	if err != nil {
+		return nil, err
+	}
+
 	return &redisStorage{
-		cli:          redis.NewClient(opts),
+		cli:          cli,
 		readTimeout:  opts.ReadTimeout,
 		writeTimeout: opts.WriteTimeout,
 		ttl:          cfg.TTL,
