@@ -316,15 +316,26 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 			} else {
 				defer conn.Close()
 			}
+
+			realip := conn.RemoteAddr()
+			if gateway.ReceiveProxyProtocol {
+				header, err := proxyproto.Read(conn.Reader())
+				if err != nil {
+					log.Printf("[e] failed to parse proxyproto for %s: %s", conn.RemoteAddr(), err)
+					return
+				}
+				realip = header.SourceAddr
+			}
+
 			_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
-			if err := gateway.serve(conn, addr); err != nil {
+			if err := gateway.serve(conn, addr, realip); err != nil {
 				if errors.Is(err, protocol.ErrInvalidPacketID) || errors.Is(err, protocol.ErrInvalidPacketLength) || errors.Is(err, os.ErrDeadlineExceeded) {
 					if Config.GeoIP.Enabled {
-						ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+						ip, _, _ := net.SplitHostPort(realip.String())
 
 						record, err := gateway.db.Country(net.ParseIP(ip))
 						if err != nil {
-							log.Printf("[i] failed to lookup country for %s", conn.RemoteAddr())
+							log.Printf("[i] failed to lookup country for %s", realip)
 						}
 						handshakeCount.With(prometheus.Labels{"type": "cancelled_invalid", "host": "", "country": record.Country.IsoCode}).Inc()
 
@@ -335,21 +346,21 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 				}
 
 				if Config.Debug {
-					log.Printf("[x] %s closed connection with %s; error: %s", conn.RemoteAddr(), addr, err)
+					log.Printf("[x] %s closed connection with %s; error: %s", realip, addr, err)
 				}
 				gateway.conngroup.Done()
 				return
 			}
 			_ = conn.SetDeadline(time.Time{})
 			if Config.Debug {
-				log.Printf("[x] %s closed connection with %s", conn.RemoteAddr(), addr)
+				log.Printf("[x] %s closed connection with %s", realip, addr)
 			}
 			gateway.conngroup.Done()
 		}()
 	}
 }
 
-func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
+func (gateway *Gateway) serve(conn Conn, addr string, realip net.Addr) (rerr error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch x := r.(type) {
@@ -367,14 +378,7 @@ func (gateway *Gateway) serve(conn Conn, addr string) (rerr error) {
 
 	session := Session{}
 
-	session.connRemoteAddr = conn.RemoteAddr()
-	if gateway.ReceiveProxyProtocol {
-		header, err := proxyproto.Read(conn.Reader())
-		if err != nil {
-			return err
-		}
-		session.connRemoteAddr = header.SourceAddr
-	}
+	session.connRemoteAddr = realip
 
 	err := error(nil)
 	session.handshakePacket, err = conn.ReadPacket(true)
