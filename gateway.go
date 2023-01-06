@@ -321,7 +321,9 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 			if gateway.ReceiveProxyProtocol {
 				header, err := proxyproto.Read(conn.Reader())
 				if err != nil {
-					log.Printf("[e] failed to parse proxyproto for %s: %s", conn.RemoteAddr(), err)
+					if Config.Debug {
+						log.Printf("[e] failed to parse proxyproto for %s: %s", conn.RemoteAddr(), err)
+					}
 					return
 				}
 				realip = header.SourceAddr
