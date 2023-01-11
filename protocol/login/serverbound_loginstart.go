@@ -18,27 +18,16 @@ type ServerLoginStartNew struct {
 	Signature  protocol.ByteArray
 }
 
-func UnmarshalServerBoundLoginStart(packet protocol.Packet) (ServerLoginStart, ServerLoginStartNew, error) {
+func UnmarshalServerBoundLoginStart(packet protocol.Packet) (ServerLoginStart, error) {
 	var pk ServerLoginStart
-	var pknew ServerLoginStartNew
 
 	if packet.ID != ServerBoundLoginStartPacketID {
-		return pk, pknew, protocol.ErrInvalidPacketID
+		return pk, protocol.ErrInvalidPacketID
 	}
 
 	if err := packet.Scan(&pk.Name); err != nil {
-		return pk, pknew, err
+		return pk, err
 	}
 
-	if err := packet.Scan(
-		&pknew.Name,
-		&pknew.HasSigData,
-		&pknew.Timestamp,
-		&pknew.PublicKey,
-		&pknew.Signature,
-	); err != nil {
-		return pk, pknew, nil
-	}
-
-	return pk, pknew, nil
+	return pk, nil
 }

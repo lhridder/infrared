@@ -79,10 +79,6 @@ type Session struct {
 	ip              string
 	serverAddress   string
 	connRemoteAddr  net.Addr
-	HasSigData      protocol.Boolean
-	Timestamp       protocol.Long
-	PublicKey       protocol.ByteArray
-	Signature       protocol.ByteArray
 	ProtocolVersion protocol.VarInt
 	config          *ProxyConfig
 }
@@ -431,22 +427,12 @@ func (gateway *Gateway) serve(conn Conn, addr string, realip net.Addr) (rerr err
 			return err
 		}
 
-		loginStart, loginStartNew, err := login.UnmarshalServerBoundLoginStart(session.loginPacket)
+		loginStart, err := login.UnmarshalServerBoundLoginStart(session.loginPacket)
 		if err != nil {
 			return err
 		}
 
-		if reflect.ValueOf(loginStartNew).IsZero() {
-			session.username = string(loginStart.Name)
-		} else {
-			if loginStartNew.HasSigData {
-				session.HasSigData = true
-				session.Timestamp = loginStartNew.Timestamp
-				session.PublicKey = loginStartNew.PublicKey
-				session.Signature = loginStartNew.Signature
-			}
-			session.username = string(loginStartNew.Name)
-		}
+		session.username = string(loginStart.Name)
 
 		if Config.GeoIP.Enabled {
 			err := gateway.geoCheck(conn, &session)
