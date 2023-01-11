@@ -333,7 +333,10 @@ func (gateway *Gateway) listenAndServe(listener Listener, addr string) error {
 			if err := gateway.serve(conn, addr, realip); err != nil {
 				if errors.Is(err, protocol.ErrInvalidPacketID) || errors.Is(err, protocol.ErrInvalidPacketLength) || errors.Is(err, os.ErrDeadlineExceeded) {
 					if Config.GeoIP.Enabled {
-						ip, _, _ := net.SplitHostPort(realip.String())
+						ip, _, err := net.SplitHostPort(realip.String())
+						if err != nil {
+							log.Printf("[i] failed to split ip and port for %s: %s", realip, err)
+						}
 
 						record, err := gateway.db.Country(net.ParseIP(ip))
 						if err != nil {
