@@ -4,7 +4,7 @@
 
 # Infrared - a Minecraft Proxy
 
-fork from [haveachin/infrared](https://github.com/haveachin/infrared)
+fork of [haveachin/infrared](https://github.com/haveachin/infrared)
 
 ## TODO
 - Make encryption check use 1.19 signatures
@@ -22,6 +22,7 @@ fork from [haveachin/infrared](https://github.com/haveachin/infrared)
 - Bandwith usage tracking for proxy configs through prometheus
 - Use redis to get proxy configs ([lhridder/infrapi](https://github.com/lhridder/infrapi))
 - Live upgrades using [tableflip](https://github.com/cloudflare/tableflip)
+- Dual stack (both IPv4 and IPv6 are supported)
 
 ## Command-Line Flags
 

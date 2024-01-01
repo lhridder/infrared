@@ -166,6 +166,10 @@ func (proxy *Proxy) handleLoginConnection(conn Conn, session Session) error {
 			DestinationAddr:   rconn.RemoteAddr(),
 		}
 
+		if net.ParseIP(session.connRemoteAddr.String()).To4() == nil {
+			header.TransportProtocol = proxyproto.TCPv6
+		}
+
 		if _, err = header.WriteTo(rconn); err != nil {
 			return err
 		}
@@ -250,6 +254,10 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 				TransportProtocol: proxyproto.TCPv4,
 				SourceAddr:        session.connRemoteAddr,
 				DestinationAddr:   rconn.RemoteAddr(),
+			}
+
+			if net.ParseIP(session.connRemoteAddr.String()).To4() == nil {
+				header.TransportProtocol = proxyproto.TCPv6
 			}
 
 			if _, err = header.WriteTo(rconn); err != nil {
