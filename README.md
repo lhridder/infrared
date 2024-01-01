@@ -18,7 +18,7 @@ fork of [haveachin/infrared](https://github.com/haveachin/infrared)
 - Allow multiple domains in 1 configfile
 - Global .yml config
 - Removed docker and callback features
-- Status packet caching
+- Status packet caching (per protocol version)
 - Bandwith usage tracking for proxy configs through prometheus
 - Use redis to get proxy configs ([lhridder/infrapi](https://github.com/lhridder/infrapi))
 - Live upgrades using [tableflip](https://github.com/cloudflare/tableflip)

@@ -243,6 +243,8 @@ func (gateway *Gateway) RegisterProxy(proxy *Proxy) error {
 	uids := proxy.UIDs()
 	for _, uid := range uids {
 		log.Println("Registering proxy with UID", uid)
+		proxy.cacheStatusRes = make(map[int32]status.ClientBoundResponse)
+		proxy.cacheStatusTime = make(map[int32]time.Time)
 		gateway.Proxies.Store(uid, proxy)
 	}
 	proxyUID := proxy.UID()

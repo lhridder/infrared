@@ -1,7 +1,6 @@
 package infrared
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/haveachin/infrared/protocol"
 	"github.com/haveachin/infrared/protocol/handshaking"
@@ -36,8 +35,8 @@ type Proxy struct {
 	mu                sync.Mutex
 
 	cacheOnlineTime   time.Time
-	cacheStatusTime   time.Time
-	cacheResponse     status.ClientBoundResponse
+	cacheStatusTime   map[int32]time.Time
+	cacheStatusRes    map[int32]status.ClientBoundResponse
 	cacheOnlineStatus bool
 
 	usedBandwith int
@@ -222,10 +221,13 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		return proxy.handleStatusRequest(conn, true)
 	}
 
-	if proxy.cacheStatusTime.IsZero() || time.Now().Sub(proxy.cacheStatusTime) > 10*time.Second {
+	proto := int32(hs.ProtocolVersion)
+	cachetime, ok := proxy.cacheStatusTime[proto]
+	if !ok || cachetime.IsZero() || time.Now().Sub(cachetime) > 10*time.Second {
 		proxy.mu.Lock()
 		defer proxy.mu.Unlock()
-		proxy.cacheStatusTime = time.Now()
+
+		proxy.cacheStatusTime[proto] = time.Now()
 
 		dialer, err := proxy.Dialer()
 		if err != nil {
@@ -236,8 +238,8 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		if err != nil {
 			log.Printf("[i] Failed to update cache for %s, %s did not respond: %s", proxyUID, proxyTo, err)
 			proxy.cacheOnlineStatus = false
-			proxy.cacheStatusTime = time.Now()
-			proxy.cacheResponse = status.ClientBoundResponse{}
+			proxy.cacheStatusTime[proto] = time.Now()
+			proxy.cacheStatusRes[proto] = status.ClientBoundResponse{}
 
 			return proxy.handleStatusRequest(conn, false)
 		}
@@ -293,8 +295,8 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		}
 
 		proxy.cacheOnlineStatus = true
-		proxy.cacheStatusTime = time.Now()
-		proxy.cacheResponse = clientboundResponse
+		proxy.cacheStatusTime[proto] = time.Now()
+		proxy.cacheStatusRes[proto] = clientboundResponse
 
 		rconn.Close()
 	}
@@ -306,26 +308,8 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		return proxy.handleStatusRequest(conn, false)
 	}
 
-	var JSONResponse status.ResponseJSON
-	err = json.Unmarshal([]byte(proxy.cacheResponse.JSONResponse), &JSONResponse)
-	if err != nil {
-		return err
-	}
-
-	responseJSON, err := json.Marshal(status.ResponseJSON{
-		Version: status.VersionJSON{
-			Name:     JSONResponse.Version.Name,
-			Protocol: int(hs.ProtocolVersion),
-		},
-		Players:     JSONResponse.Players,
-		Description: JSONResponse.Description,
-		Favicon:     JSONResponse.Favicon,
-	})
-	if err != nil {
-		return err
-	}
 	err = conn.WritePacket(status.ClientBoundResponse{
-		JSONResponse: protocol.String(responseJSON),
+		JSONResponse: proxy.cacheStatusRes[proto].JSONResponse,
 	}.Marshal())
 	if err != nil {
 		return err
@@ -349,7 +333,7 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 	}
 
 	if Config.Debug {
-		log.Printf("[i] Sent %s cached response for %s", session.connRemoteAddr, proxyUID)
+		log.Printf("[i] Sent %s cached response for %s, proto version %d", session.connRemoteAddr, proxyUID, proto)
 	}
 	return nil
 }
