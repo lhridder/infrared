@@ -210,6 +210,7 @@ func main() {
 		}
 		<-infrared.Upg.Exit()
 		log.Println("Starting tableflip shutdown for old instance")
+		gateway.Close()
 
 		gateway.WaitConnGroup()
 		log.Println("Shutting down infrared")
