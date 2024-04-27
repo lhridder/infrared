@@ -35,8 +35,8 @@ type Proxy struct {
 	mu                sync.Mutex
 
 	cacheOnlineTime   time.Time
-	cacheStatusTime   map[int32]time.Time
-	cacheStatusRes    map[int32]status.ClientBoundResponse
+	cacheStatusTime   sync.Map
+	cacheStatusRes    sync.Map
 	cacheOnlineStatus bool
 
 	usedBandwith int
@@ -222,12 +222,19 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 	}
 
 	proto := int32(hs.ProtocolVersion)
-	cachetime, ok := proxy.cacheStatusTime[proto]
+
+	var cachetime time.Time
+	entry, ok := proxy.cacheStatusTime.Load(proto)
+	if !ok {
+		cachetime = time.Time{}
+	} else {
+		cachetime = entry.(time.Time)
+	}
 	if !ok || cachetime.IsZero() || time.Now().Sub(cachetime) > 10*time.Second {
 		proxy.mu.Lock()
 		defer proxy.mu.Unlock()
 
-		proxy.cacheStatusTime[proto] = time.Now()
+		proxy.cacheStatusTime.Store(proto, time.Now())
 
 		dialer, err := proxy.Dialer()
 		if err != nil {
@@ -238,8 +245,8 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		if err != nil {
 			log.Printf("[i] Failed to update cache for %s, %s did not respond: %s", proxyUID, proxyTo, err)
 			proxy.cacheOnlineStatus = false
-			proxy.cacheStatusTime[proto] = time.Now()
-			proxy.cacheStatusRes[proto] = status.ClientBoundResponse{}
+			proxy.cacheStatusTime.Store(proto, time.Now())
+			proxy.cacheStatusRes.Store(proto, status.ClientBoundResponse{})
 
 			return proxy.handleStatusRequest(conn, false)
 		}
@@ -295,8 +302,8 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		}
 
 		proxy.cacheOnlineStatus = true
-		proxy.cacheStatusTime[proto] = time.Now()
-		proxy.cacheStatusRes[proto] = clientboundResponse
+		proxy.cacheStatusTime.Store(proto, time.Now())
+		proxy.cacheStatusRes.Store(proto, clientboundResponse)
 
 		rconn.Close()
 	}
@@ -308,8 +315,14 @@ func (proxy *Proxy) handleStatusConnection(conn Conn, session Session) error {
 		return proxy.handleStatusRequest(conn, false)
 	}
 
+	entry, ok = proxy.cacheStatusRes.Load(proto)
+	if !ok {
+		return fmt.Errorf("failed to get cache status response")
+	}
+	res := entry.(status.ClientBoundResponse)
+
 	err = conn.WritePacket(status.ClientBoundResponse{
-		JSONResponse: proxy.cacheStatusRes[proto].JSONResponse,
+		JSONResponse: res.JSONResponse,
 	}.Marshal())
 	if err != nil {
 		return err
