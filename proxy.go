@@ -368,9 +368,7 @@ func pipe(src, dst Conn, proxy *Proxy) {
 		}
 
 		if Config.TrackBandwidth {
-			proxy.mu.Lock()
 			proxy.usedBandwith = proxy.usedBandwith + len(data)
-			proxy.mu.Unlock()
 		}
 	}
 }
